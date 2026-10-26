@@ -1,0 +1,14 @@
+{
+  "network": "test",
+  "netuid": 578,
+  "mechanism": 1,
+  "epochCommand": ["/opt/attelier-inference/.venv/bin/python", "/opt/attelier-inference/current/scripts/inference_gateway_epoch.py"],
+  "gatewaySealCommand": ["/opt/attelier-inference/current/bin/gateway-seal", "--output-directory", "/var/lib/attelier-inference/gateway/closed"],
+  "closedBodyDirectory": "/var/lib/attelier-inference/gateway/closed",
+  "workDirectory": "/var/lib/attelier-inference/gateway/cycle",
+  "policy": "/etc/attelier-inference/gateway-policy.json",
+  "gatewaySignCommand": ["/usr/local/libexec/attelier-gateway-sign", "--body", "{body}", "--out", "{out}"],
+  "master": {"walletName": "M1_MASTER", "walletHotkey": "LOCAL_MASTER_HOTKEY_ALIAS", "publisherHotkey": "REPLACE_WITH_M1_MASTER_SS58", "walletPath": "/var/lib/attelier-inference/wallets"},
+  "light": {"walletName": "M1_LIGHT", "walletHotkey": "REPLACE_WITH_M1_LIGHT_HOTKEY", "walletPath": "/var/lib/attelier-inference/wallets"},
+  "publicationAuthorityDirectory": "/var/lib/attelier-inference/gateway/authority"
+}

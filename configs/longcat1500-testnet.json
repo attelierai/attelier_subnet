@@ -1,0 +1,31 @@
+{
+  "reference": {
+    "backend": "hf",
+    "repo_id": "lightx2v/Wan2.1-T2V-1.3B-longcat-step1500",
+    "revision": "791dc13f1e672d4643c736b273d8c91a85da6b40"
+  },
+  "role": "lora",
+  "files": [
+    {
+      "path": "adapter_config.json",
+      "sha256": "41f156609c7bc7f362635fd015ef1e72be83b0709a2e7b6e650de04c7e1d4d81",
+      "bytes": 802
+    },
+    {
+      "path": "adapter_model.safetensors",
+      "sha256": "fb6f53e41dffd7edb6de6e63a145e1e5fa14f48135b06bc626751bba29232881",
+      "bytes": 700000376
+    }
+  ],
+  "license": "mit",
+  "generation_config": {
+    "steps": 16,
+    "guidance_scale": 4.5,
+    "scheduler": "original_unipc"
+  },
+  "base_reference": {
+    "backend": "hf",
+    "repo_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+    "revision": "0fad780a534b6463e45facd96134c9f345acfa5b"
+  }
+}

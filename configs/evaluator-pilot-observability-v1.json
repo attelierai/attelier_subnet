@@ -1,0 +1,938 @@
+{
+  "schema": "forge/evaluator-pilot-observability-protocol/v1",
+  "pilot_id": "ce1202da784eb53ec67b7edc141cf41ad767e0eeb2045dd9eff20b435365e7ad",
+  "worklist_id": "edaa50c9933e04ae314abb95b1707cf35cb9bb7f15d51c9c6efcb52d3c417c96",
+  "review_stage": "PRE_SCORE_MEDIA_REVIEW",
+  "score_access_boundary": "before_luna_fusion_or_metric_score_access",
+  "perceptual_rules": {
+    "self": {
+      "applicability": "same frozen media job",
+      "observable_when": "media identity is confirmed",
+      "reject_when": "a distinct job or digest is substituted"
+    },
+    "same_model_new_run": {
+      "applicability": "same prompt and seed, separate run",
+      "observable_when": "both clips are reviewable as legitimate variation",
+      "reject_when": "ordinary variation is called degradation"
+    },
+    "independent_seed": {
+      "applicability": "same prompt and preregistered distinct seed",
+      "observable_when": "both clips are reviewable as prompt-consistent variation",
+      "reject_when": "a changed composition alone is called degradation"
+    },
+    "static_scene": {
+      "applicability": "static-camera source with no requested action",
+      "observable_when": "absence of movement remains legitimate",
+      "reject_when": "static content is penalized for lacking motion"
+    },
+    "freeze": {
+      "applicability": "reference requests meaningful subject or camera motion",
+      "observable_when": "visible reference progression is removed by the candidate",
+      "reject_when": "reference lacks meaningful motion or pixels alone are evidence"
+    },
+    "blur_mild": {
+      "applicability": "frozen same-content mild Gaussian treatment",
+      "observable_when": "blur is perceptible and content remains comparable",
+      "reject_when": "a changed digest without perceptible blur is evidence"
+    },
+    "blur_severe": {
+      "applicability": "frozen same-content severe Gaussian treatment",
+      "observable_when": "blur is perceptible and content remains comparable",
+      "reject_when": "a changed digest without perceptible blur is evidence"
+    },
+    "shuffle": {
+      "applicability": "meaningful requested motion and frozen nonidentity permutation",
+      "observable_when": "temporal progression has perceptible order disruption",
+      "reject_when": "no-motion source or permutation alone is evidence"
+    },
+    "wrong_video": {
+      "applicability": "bound distinct source and donor lineages",
+      "observable_when": "donor is perceptibly inconsistent with the source prompt",
+      "reject_when": "distinct lineage alone is evidence"
+    },
+    "detail_loss": {
+      "applicability": "frozen same-content downscale/upscale treatment",
+      "observable_when": "visible detail loss with comparable content",
+      "reject_when": "transform or pixels alone are evidence"
+    },
+    "evaluator_attack_mild": {
+      "applicability": "frozen mild temporal-luma treatment",
+      "observable_when": "temporal photometric artifact is perceptible",
+      "reject_when": "numeric luma offset or pixels alone are evidence"
+    },
+    "evaluator_attack_severe": {
+      "applicability": "frozen severe temporal-luma treatment",
+      "observable_when": "temporal photometric artifact is perceptible",
+      "reject_when": "numeric luma offset or pixels alone are evidence"
+    }
+  },
+  "requirements": [
+    {
+      "slot_id": "80d4ad7e4a47804b2122b452e8488d5f520c4b4525604fc889c8974f219fc172",
+      "kind": "self",
+      "reference_job_id": "8eba2ff29c0fdcd2c941eba9cd8761708e8ddb958015d80fce97deacf64754d9",
+      "candidate_job_id": "8eba2ff29c0fdcd2c941eba9cd8761708e8ddb958015d80fce97deacf64754d9",
+      "lineage_hash": "902058693868c19b981abea158202c5dbaa85e3605928d05a456e83f680f76f5",
+      "treatment_hash": "cf46d210782ba0a1f7f84f8ab6455b26fd5e35ddd1f02e359de89229e363c576",
+      "perceptual_rule_id": "e8cb3a9f6e8cba215533c01f8b64cfc33e3976f12788407ee968662505c72cd3"
+    },
+    {
+      "slot_id": "dc67a0d984ef6d28640b6baf38e8ec9013a44817913ceb93df2178f4d74fd761",
+      "kind": "self",
+      "reference_job_id": "bbb550fac610aa7260a032090a0741ee42675da57736be89d7ec7e49b55796f5",
+      "candidate_job_id": "bbb550fac610aa7260a032090a0741ee42675da57736be89d7ec7e49b55796f5",
+      "lineage_hash": "1f240fba76b403585d2d1fd19a96d858e2a7ad64f06dc78820d0a454a82a3791",
+      "treatment_hash": "e2022132388f09a2dc79b8117058d511baac37507af762076a08c320b3464c38",
+      "perceptual_rule_id": "e8cb3a9f6e8cba215533c01f8b64cfc33e3976f12788407ee968662505c72cd3"
+    },
+    {
+      "slot_id": "f3abddbc7562a24ae147874e2d9f0d3a369d75ddf3a7a65c79497db47aaeb904",
+      "kind": "self",
+      "reference_job_id": "759f1ee0a8a756c495b3a282f8f214973eadd78f98be305d7be805a50798a55a",
+      "candidate_job_id": "759f1ee0a8a756c495b3a282f8f214973eadd78f98be305d7be805a50798a55a",
+      "lineage_hash": "3f00c5db8b5945cbdb46067e06cf4a371f2aab436ece06d2eedbba07ba2a5740",
+      "treatment_hash": "834f127748a5d79688b0391bc7aaabc2f6555e524e27c6dd6c559e103ab1cca2",
+      "perceptual_rule_id": "e8cb3a9f6e8cba215533c01f8b64cfc33e3976f12788407ee968662505c72cd3"
+    },
+    {
+      "slot_id": "bcd33bceee9d343c4322a243188ac67f42224fa924db8ac661a21cde05ecb69e",
+      "kind": "self",
+      "reference_job_id": "81af4d48d59035d6dfe79f761b103c4467f7a41f1224de009974519ae667d4b5",
+      "candidate_job_id": "81af4d48d59035d6dfe79f761b103c4467f7a41f1224de009974519ae667d4b5",
+      "lineage_hash": "9ed2d4e7c5f7ff58ee50afb49a5aa3c17e7a15c8da6637f877cd54ca42a9d47a",
+      "treatment_hash": "cd48fe8ffe7e44db6ab5d3b3e0888c8697ebbc3bf15b55cc0452ccac58581474",
+      "perceptual_rule_id": "e8cb3a9f6e8cba215533c01f8b64cfc33e3976f12788407ee968662505c72cd3"
+    },
+    {
+      "slot_id": "0170363788efa3bbb4213a76476193672591c0ee4fd241065c8853c4696f767b",
+      "kind": "self",
+      "reference_job_id": "cf9613752795006690b752dd34eaa292cac0a7cf2a8c1eebd8efd07c4ec13409",
+      "candidate_job_id": "cf9613752795006690b752dd34eaa292cac0a7cf2a8c1eebd8efd07c4ec13409",
+      "lineage_hash": "2960f1129b92856d807770c65b0a2b2c88e3e2c326571d30986f6dc01521314c",
+      "treatment_hash": "6ebc2fb5f54084c8e906d69c1d8a4f7bfdf3ce39a1c2211764d67916ba373dd0",
+      "perceptual_rule_id": "e8cb3a9f6e8cba215533c01f8b64cfc33e3976f12788407ee968662505c72cd3"
+    },
+    {
+      "slot_id": "7f9ea9fc8817306f98f003d44352e972545fb3f1ce18ac4483e41ef2841c54be",
+      "kind": "self",
+      "reference_job_id": "ce16727de3770402f5972aba7acfbdc3ae32470b5f8cfb778a3a9cf4c6b25b6a",
+      "candidate_job_id": "ce16727de3770402f5972aba7acfbdc3ae32470b5f8cfb778a3a9cf4c6b25b6a",
+      "lineage_hash": "be500bae3afca3eff067b5164451e08a1ee2b5a81e6deaf5561864dccd030108",
+      "treatment_hash": "25215a07f32ac9fc93228e9b10f9ddbb73c8efc3ddf1c73d6818da53d52ab71f",
+      "perceptual_rule_id": "e8cb3a9f6e8cba215533c01f8b64cfc33e3976f12788407ee968662505c72cd3"
+    },
+    {
+      "slot_id": "b97cb8ffc2d307aed7758d14b2e552f81ee47b0cbe5b0ec051a7518c8cb04fcf",
+      "kind": "self",
+      "reference_job_id": "aef10a36e9119f2a273bfa9309b5dd0313d3cd767aac55799daab520f10720d7",
+      "candidate_job_id": "aef10a36e9119f2a273bfa9309b5dd0313d3cd767aac55799daab520f10720d7",
+      "lineage_hash": "d0bf730aa56d348b77844e2a6457b4883fe3d1f92e7e29020df9a590d1f20c7e",
+      "treatment_hash": "9b7b010646bc5203dc6551d825ce8be9571abaeb9ab46b8779e1ab1fd0f6dc88",
+      "perceptual_rule_id": "e8cb3a9f6e8cba215533c01f8b64cfc33e3976f12788407ee968662505c72cd3"
+    },
+    {
+      "slot_id": "716eb443284327afb22b7a02003e977f90c061953fb6afc9e28432a0e21cecb8",
+      "kind": "self",
+      "reference_job_id": "99df29b294239f33e7de762ee0e81cb685806b93294ded4b72ef365ef65b86ea",
+      "candidate_job_id": "99df29b294239f33e7de762ee0e81cb685806b93294ded4b72ef365ef65b86ea",
+      "lineage_hash": "9c71150b9c2c7b927e078030653bc9ad609c00a82ea78ff8c462f1992f27b507",
+      "treatment_hash": "17083631aaab2a1096a89675673b7a7eac38b9fc500c6ab630eb5121d59d0859",
+      "perceptual_rule_id": "e8cb3a9f6e8cba215533c01f8b64cfc33e3976f12788407ee968662505c72cd3"
+    },
+    {
+      "slot_id": "c880f2783220643a178b8b3f9c92f9405fa4fa429656ffcd9a224c0b604a94cb",
+      "kind": "same_model_new_run",
+      "reference_job_id": "99e7964b92d8b8c86f8cfb4291db8dee7ef90ef03ef2980f146c73d1af95f9d5",
+      "candidate_job_id": "ea148bffa1fccbd1dac1c6fc66c836a773b1d5323e4160d93347c125e7c0e72f",
+      "lineage_hash": "48fc777986f6c5058f67dad3300f5298089af46c3ef1893b06f1d0befd987829",
+      "treatment_hash": "0cc9762601cca2517414d5f45ed6e8b6e221573d62b4b493d6911d4d11ba6b95",
+      "perceptual_rule_id": "d97a88cbab1715018252ce4471387de9c81b2c8693b4beb2812e712e81577e3f"
+    },
+    {
+      "slot_id": "60c33f46c04620a10a9b85098c82b4bfaa81b0a67604b6c683114f0d2527c6a2",
+      "kind": "same_model_new_run",
+      "reference_job_id": "22139c6d6d954edd0efd9142fd962010a8c7fd0d40690009c4f145bd11d5c103",
+      "candidate_job_id": "ba9ac70237e5a3d79f33197dc1ede14837a74ae8b5715940227d2b3d794c9af8",
+      "lineage_hash": "9063728e8e1c42f7bd04da1e5090258c8c3b2eb55e2dd358e8c72cf58e760501",
+      "treatment_hash": "4f1aa8237419b3314f5ced0ce591d4790c00274a14fb608fcd44c5a8b6b449b6",
+      "perceptual_rule_id": "d97a88cbab1715018252ce4471387de9c81b2c8693b4beb2812e712e81577e3f"
+    },
+    {
+      "slot_id": "29f18024a9eaccef32b4e7b2e71cb68cace7a95cab9ba193a2aea0067e23e338",
+      "kind": "same_model_new_run",
+      "reference_job_id": "1243cde69dc7bfe7beedeb14ad5a411f5ab00415c32e5df56fa2e0602d91cac8",
+      "candidate_job_id": "97ac460a51e45ca47ef90eaeb023d19b41cbeef83958a25103fc9497cb2d5c77",
+      "lineage_hash": "c73096574cf47b3ea70b08d20abab43b21ccebffb4c5dd2fca384fc103c3e8e3",
+      "treatment_hash": "68e46fa5cb0aa267dca7e4db5594ad7307e067e5747820b372c446f93eeb5dd8",
+      "perceptual_rule_id": "d97a88cbab1715018252ce4471387de9c81b2c8693b4beb2812e712e81577e3f"
+    },
+    {
+      "slot_id": "0ea47f397cfd0488e7f64d6607aa5ef11839797017cf907afcfc8200a9e70123",
+      "kind": "same_model_new_run",
+      "reference_job_id": "2fa21924bc188fd8ca74162375bea24338a0ea15d1f0023d1dee7899bc7a727e",
+      "candidate_job_id": "d0d8cabff685cc6933ee5b1807bfb4fbd64027c3aa0a51425c72b43b080e2b87",
+      "lineage_hash": "d700fa7e46c9146182dc8f699d3e9bbc7dada05a6adb232559952825203af56d",
+      "treatment_hash": "9c8141a2573a1fcb3b832c7fd8fc7bcedc5f47982f0a8b319e2a4fd617df1b3f",
+      "perceptual_rule_id": "d97a88cbab1715018252ce4471387de9c81b2c8693b4beb2812e712e81577e3f"
+    },
+    {
+      "slot_id": "cf00ac2a42d94e8fe0a1ccaeddf30170995ecc933010dce703ce0fe657de7f27",
+      "kind": "same_model_new_run",
+      "reference_job_id": "8eba2ff29c0fdcd2c941eba9cd8761708e8ddb958015d80fce97deacf64754d9",
+      "candidate_job_id": "7bb8b15552905991cf186fe90a5a97dcb54cd1bf65ef5fdf6c3160539c8b21ec",
+      "lineage_hash": "902058693868c19b981abea158202c5dbaa85e3605928d05a456e83f680f76f5",
+      "treatment_hash": "4918f8f99aa6631e960d14fecc893b320380978c907972e123f3f54c752a84c3",
+      "perceptual_rule_id": "d97a88cbab1715018252ce4471387de9c81b2c8693b4beb2812e712e81577e3f"
+    },
+    {
+      "slot_id": "4f7c209900236e3ed280e3ac30dcbf4d6d9ccbfb532e69b3c1829c24457377a1",
+      "kind": "same_model_new_run",
+      "reference_job_id": "bbb550fac610aa7260a032090a0741ee42675da57736be89d7ec7e49b55796f5",
+      "candidate_job_id": "e22a9dd55f84aae5e44f976c777667bbd7d2eedd30ce40e30b342ce2ed62b687",
+      "lineage_hash": "1f240fba76b403585d2d1fd19a96d858e2a7ad64f06dc78820d0a454a82a3791",
+      "treatment_hash": "3bb244423c83efd794f14b0c1ea998d50ca6a307b9993b4b3e5885027bf1d973",
+      "perceptual_rule_id": "d97a88cbab1715018252ce4471387de9c81b2c8693b4beb2812e712e81577e3f"
+    },
+    {
+      "slot_id": "f8076853dfa755b04ed7b7ebeef0668d9428407b97ca66ddc2e991d4ebbc9d4b",
+      "kind": "same_model_new_run",
+      "reference_job_id": "759f1ee0a8a756c495b3a282f8f214973eadd78f98be305d7be805a50798a55a",
+      "candidate_job_id": "27582cdd75a3a87ea00fd672f32951b42fef65575cae1616339b9de015406f10",
+      "lineage_hash": "3f00c5db8b5945cbdb46067e06cf4a371f2aab436ece06d2eedbba07ba2a5740",
+      "treatment_hash": "64ef1cefb10b5da9ce729a3b8b84b8c1d6797c54945cddf7121fbb1aacb1961f",
+      "perceptual_rule_id": "d97a88cbab1715018252ce4471387de9c81b2c8693b4beb2812e712e81577e3f"
+    },
+    {
+      "slot_id": "c65ef627137c98810a02a78e14584efdb8f07ac8fb8d6bb6d6776ab3f25384d8",
+      "kind": "same_model_new_run",
+      "reference_job_id": "81af4d48d59035d6dfe79f761b103c4467f7a41f1224de009974519ae667d4b5",
+      "candidate_job_id": "a4b94d5953e90062cc2c8b954be4c983b809de3cb4696222df22de24be6556bb",
+      "lineage_hash": "9ed2d4e7c5f7ff58ee50afb49a5aa3c17e7a15c8da6637f877cd54ca42a9d47a",
+      "treatment_hash": "0f69d6882e071f73d4bd921fb1ffbbcf55aaa5e4c07cdd618cdd4cd1e9af09f3",
+      "perceptual_rule_id": "d97a88cbab1715018252ce4471387de9c81b2c8693b4beb2812e712e81577e3f"
+    },
+    {
+      "slot_id": "4806e18210f9330bcd9ddd928fb0671e421f13a7d0edb7e1b749fad142202980",
+      "kind": "independent_seed",
+      "reference_job_id": "99e7964b92d8b8c86f8cfb4291db8dee7ef90ef03ef2980f146c73d1af95f9d5",
+      "candidate_job_id": "2cc6af1b5b11ce2af10ebfc351a5ef5ade6f20330f15d2dda02a05ff462bdb3a",
+      "lineage_hash": "48fc777986f6c5058f67dad3300f5298089af46c3ef1893b06f1d0befd987829",
+      "treatment_hash": "1f09a69ccab05af9c34c47138a245d169659b802fec439484fbf9d95579751e3",
+      "perceptual_rule_id": "32241f1bacee2e352f99bdc6dda4a7d7207be295ac67bc834992038a9438bbbb"
+    },
+    {
+      "slot_id": "ed8cd0ae46eb9c6874e85242a37614234c0951d793ecafa0ce87d79663e7e0b9",
+      "kind": "independent_seed",
+      "reference_job_id": "22139c6d6d954edd0efd9142fd962010a8c7fd0d40690009c4f145bd11d5c103",
+      "candidate_job_id": "d2bdd343a516aebb3ddc0f155bc30f55044ae22220871c1523a7a6e7d9b8a131",
+      "lineage_hash": "9063728e8e1c42f7bd04da1e5090258c8c3b2eb55e2dd358e8c72cf58e760501",
+      "treatment_hash": "87ce7181b5bea0225659c265f83ad805f79593815c1d4e8ca30e0dbd30b12785",
+      "perceptual_rule_id": "32241f1bacee2e352f99bdc6dda4a7d7207be295ac67bc834992038a9438bbbb"
+    },
+    {
+      "slot_id": "d5279239d47d66c2b00d8bf7bafc2c57fed4aeb1389bfc6dccbbc46726bd61c0",
+      "kind": "independent_seed",
+      "reference_job_id": "1243cde69dc7bfe7beedeb14ad5a411f5ab00415c32e5df56fa2e0602d91cac8",
+      "candidate_job_id": "5528ffb03217440c8b7491896c02dc92680266fd736185be846db60fcf2823b1",
+      "lineage_hash": "c73096574cf47b3ea70b08d20abab43b21ccebffb4c5dd2fca384fc103c3e8e3",
+      "treatment_hash": "b8e4e988c21004c4d6494cad3374a297f12af036b680ebf5860fc2080cace24e",
+      "perceptual_rule_id": "32241f1bacee2e352f99bdc6dda4a7d7207be295ac67bc834992038a9438bbbb"
+    },
+    {
+      "slot_id": "858cbeb4cc60ae489c7fae71833aa84ba4f807eb10db912c12763d6bddb911ce",
+      "kind": "independent_seed",
+      "reference_job_id": "2fa21924bc188fd8ca74162375bea24338a0ea15d1f0023d1dee7899bc7a727e",
+      "candidate_job_id": "30701b93c52e4d10e8390c878b511e178c5973ac36d9e328d0592d2908dd0474",
+      "lineage_hash": "d700fa7e46c9146182dc8f699d3e9bbc7dada05a6adb232559952825203af56d",
+      "treatment_hash": "c809fa0fec02c759d052013f9d9b96fe993e8ce4a207cb3afd201c2315f9dc3a",
+      "perceptual_rule_id": "32241f1bacee2e352f99bdc6dda4a7d7207be295ac67bc834992038a9438bbbb"
+    },
+    {
+      "slot_id": "9e5b1d920c2bdeb82cf04cebbd33512714d7fc54464462d6291cab2f63084461",
+      "kind": "independent_seed",
+      "reference_job_id": "8eba2ff29c0fdcd2c941eba9cd8761708e8ddb958015d80fce97deacf64754d9",
+      "candidate_job_id": "b3db01f5eada44ec949f62e0cde0adade17c30f55061462d492d40989678a4ff",
+      "lineage_hash": "902058693868c19b981abea158202c5dbaa85e3605928d05a456e83f680f76f5",
+      "treatment_hash": "50fe5ab387df9679c61b69a224da9fa6a1a1dd4d0a8841b34ca1118dbb978a26",
+      "perceptual_rule_id": "32241f1bacee2e352f99bdc6dda4a7d7207be295ac67bc834992038a9438bbbb"
+    },
+    {
+      "slot_id": "156b7024cdb78e19074a0ddd9fb6cc7d5fc54ee7b9ccdce25a9d62e25d1c2ea4",
+      "kind": "independent_seed",
+      "reference_job_id": "bbb550fac610aa7260a032090a0741ee42675da57736be89d7ec7e49b55796f5",
+      "candidate_job_id": "31f8a4afbdd586e93532a8c2320ded5fc456b4cad805e8da58b70749dfb78208",
+      "lineage_hash": "1f240fba76b403585d2d1fd19a96d858e2a7ad64f06dc78820d0a454a82a3791",
+      "treatment_hash": "0273dbc207e9cb31531d80d30ba441d58ed0a5bb9af258cbb95fe25ca14ff323",
+      "perceptual_rule_id": "32241f1bacee2e352f99bdc6dda4a7d7207be295ac67bc834992038a9438bbbb"
+    },
+    {
+      "slot_id": "db7b278d813d80427be614ad3991d1e3cd663003cc13d32a31d85649c8770eca",
+      "kind": "independent_seed",
+      "reference_job_id": "759f1ee0a8a756c495b3a282f8f214973eadd78f98be305d7be805a50798a55a",
+      "candidate_job_id": "5d597f902531ca349bd9ddd5ae4e295ae80df3f1c1e34ad344222de1cfdc10bf",
+      "lineage_hash": "3f00c5db8b5945cbdb46067e06cf4a371f2aab436ece06d2eedbba07ba2a5740",
+      "treatment_hash": "44e3b0ce726f39c588a51a30fb003392f11f050c1e5378a83392f5ff67e54af6",
+      "perceptual_rule_id": "32241f1bacee2e352f99bdc6dda4a7d7207be295ac67bc834992038a9438bbbb"
+    },
+    {
+      "slot_id": "48dcf375189046b82d9b15c3c2ed6ac19ec2422a363b0a512635fd1cb52292dd",
+      "kind": "independent_seed",
+      "reference_job_id": "81af4d48d59035d6dfe79f761b103c4467f7a41f1224de009974519ae667d4b5",
+      "candidate_job_id": "6c534105a8be7c6ecb87e1044f0da460b3c780c3f48219b46705e3cc962e1b0f",
+      "lineage_hash": "9ed2d4e7c5f7ff58ee50afb49a5aa3c17e7a15c8da6637f877cd54ca42a9d47a",
+      "treatment_hash": "1b595423c6e8add042dd222b34ec12d4aec53ee93f57597564745bbfde9c944a",
+      "perceptual_rule_id": "32241f1bacee2e352f99bdc6dda4a7d7207be295ac67bc834992038a9438bbbb"
+    },
+    {
+      "slot_id": "53f8df40ac8708e8480c38c8e93ec31cc7b6329546b77cfc34968461940f540c",
+      "kind": "static_scene",
+      "reference_job_id": "99e7964b92d8b8c86f8cfb4291db8dee7ef90ef03ef2980f146c73d1af95f9d5",
+      "candidate_job_id": "99e7964b92d8b8c86f8cfb4291db8dee7ef90ef03ef2980f146c73d1af95f9d5",
+      "lineage_hash": "48fc777986f6c5058f67dad3300f5298089af46c3ef1893b06f1d0befd987829",
+      "treatment_hash": "87a867dcaf50359445b56a58cf0a53482dff79e2b09b3eb80e46e76ba0aee36e",
+      "perceptual_rule_id": "52338da8a9369f16868d1c62c0b1a964e713ee5cd8b5737988fa3387518c05cb"
+    },
+    {
+      "slot_id": "588027a15101ac55538123d7824de471bcc4a3164f4187e090a5cc0fdf6f5106",
+      "kind": "static_scene",
+      "reference_job_id": "22139c6d6d954edd0efd9142fd962010a8c7fd0d40690009c4f145bd11d5c103",
+      "candidate_job_id": "22139c6d6d954edd0efd9142fd962010a8c7fd0d40690009c4f145bd11d5c103",
+      "lineage_hash": "9063728e8e1c42f7bd04da1e5090258c8c3b2eb55e2dd358e8c72cf58e760501",
+      "treatment_hash": "ae6ca4d5901c8f44746546f4e4ad209f8f5ccfce5f7989fe7a64365aaa99a288",
+      "perceptual_rule_id": "52338da8a9369f16868d1c62c0b1a964e713ee5cd8b5737988fa3387518c05cb"
+    },
+    {
+      "slot_id": "65f0eb8e4ab826819fa420ec368ae6d647d52f3dac58a7a11a902d58fb4d2e21",
+      "kind": "static_scene",
+      "reference_job_id": "1243cde69dc7bfe7beedeb14ad5a411f5ab00415c32e5df56fa2e0602d91cac8",
+      "candidate_job_id": "1243cde69dc7bfe7beedeb14ad5a411f5ab00415c32e5df56fa2e0602d91cac8",
+      "lineage_hash": "c73096574cf47b3ea70b08d20abab43b21ccebffb4c5dd2fca384fc103c3e8e3",
+      "treatment_hash": "5989c6e3e1b6c17e621444f90dba72317ccf2f9c37a4f2211290eaf6636908c4",
+      "perceptual_rule_id": "52338da8a9369f16868d1c62c0b1a964e713ee5cd8b5737988fa3387518c05cb"
+    },
+    {
+      "slot_id": "db2bf84a7582c7b9c64a2958e60d16cd6fbe15d4efbb0b9a30ea7508c2692e87",
+      "kind": "static_scene",
+      "reference_job_id": "2fa21924bc188fd8ca74162375bea24338a0ea15d1f0023d1dee7899bc7a727e",
+      "candidate_job_id": "2fa21924bc188fd8ca74162375bea24338a0ea15d1f0023d1dee7899bc7a727e",
+      "lineage_hash": "d700fa7e46c9146182dc8f699d3e9bbc7dada05a6adb232559952825203af56d",
+      "treatment_hash": "23420fea037b4b77ad41cab2aadf5e3436be0731da7e9c84a7f49ceefe66a4ed",
+      "perceptual_rule_id": "52338da8a9369f16868d1c62c0b1a964e713ee5cd8b5737988fa3387518c05cb"
+    },
+    {
+      "slot_id": "3f40a429dfb5d3387407c41a3c5ac8ad83c9b65c5ec47adde95d3d97af261ab0",
+      "kind": "static_scene",
+      "reference_job_id": "2709d6388546ee1900ab40c18fe0746b728114ba78adc35aab79ce178f1108dc",
+      "candidate_job_id": "2709d6388546ee1900ab40c18fe0746b728114ba78adc35aab79ce178f1108dc",
+      "lineage_hash": "142841c1b834707c8e4240c49f79978155bfcf0311bc55eac5d260e009ad9097",
+      "treatment_hash": "c026a1495ae06ea5b520dcfa9d1910c6d71259fd669003540326d399f7c22381",
+      "perceptual_rule_id": "52338da8a9369f16868d1c62c0b1a964e713ee5cd8b5737988fa3387518c05cb"
+    },
+    {
+      "slot_id": "38e8e20f088f4d2893fd04acb57c86fbf81938a9156bb6a8caadd441d1eff64c",
+      "kind": "static_scene",
+      "reference_job_id": "e4dad6a06476f0d21a0c31c36ffabc3338d80333f7cc4f9f2e766b7e30464b23",
+      "candidate_job_id": "e4dad6a06476f0d21a0c31c36ffabc3338d80333f7cc4f9f2e766b7e30464b23",
+      "lineage_hash": "9137b6371670e5721a928d64cc24b955f1781f2097db42cfbc3f1589e0a2f957",
+      "treatment_hash": "ce5e997e132c5381f77620c9df8e89846e141e316f6f11535370914c6ca4cd70",
+      "perceptual_rule_id": "52338da8a9369f16868d1c62c0b1a964e713ee5cd8b5737988fa3387518c05cb"
+    },
+    {
+      "slot_id": "ae42f9c647508e4e496b7e72d27618794938383e7918f6c65cfe1e35efb7836f",
+      "kind": "static_scene",
+      "reference_job_id": "79ebe33b8e3a7a9aedc8ada642d4a70b7f220dc794d6edf79e2cae07123f3f2b",
+      "candidate_job_id": "79ebe33b8e3a7a9aedc8ada642d4a70b7f220dc794d6edf79e2cae07123f3f2b",
+      "lineage_hash": "4de765e1eb41be00ffe3e5355fa05afe163836e4850c1640cece06673ac1871a",
+      "treatment_hash": "f5f7349707c9c39113b7d1097343251790cb2dd4becd7875cda5949dacc623cd",
+      "perceptual_rule_id": "52338da8a9369f16868d1c62c0b1a964e713ee5cd8b5737988fa3387518c05cb"
+    },
+    {
+      "slot_id": "bb263f06e36f861bbcbf3b46670e0c84a77fc43f7584a83373c37f1e7702af9c",
+      "kind": "static_scene",
+      "reference_job_id": "330a2fdbb9e1400e3f6821838e1e5991a76d37df36921381271155dd2402b071",
+      "candidate_job_id": "330a2fdbb9e1400e3f6821838e1e5991a76d37df36921381271155dd2402b071",
+      "lineage_hash": "076b399628f8e1176c4c25d1a7df0e640e4e8d240f5977e368075637b01448ee",
+      "treatment_hash": "344966a162564040e01d3c3678292fea78caf5e4ecbbd951675639e41187353e",
+      "perceptual_rule_id": "52338da8a9369f16868d1c62c0b1a964e713ee5cd8b5737988fa3387518c05cb"
+    },
+    {
+      "slot_id": "b4d14088a14a856e9da798b57a0bba9439c926f74e5481225bf161d463dddfa4",
+      "kind": "freeze",
+      "reference_job_id": "8eba2ff29c0fdcd2c941eba9cd8761708e8ddb958015d80fce97deacf64754d9",
+      "candidate_job_id": "d83809b24d2d7c0c6e3add44dae41b7ca51618f9dcf592e936c66d62c8eeae6a",
+      "lineage_hash": "902058693868c19b981abea158202c5dbaa85e3605928d05a456e83f680f76f5",
+      "treatment_hash": "05246fba53d335b94b06540836c3b542f7e4c1046be51749bd9e106c5d9cada5",
+      "perceptual_rule_id": "0d3331e2bd398d98ecfdf56bd4100e82a87e1dd8cb6bd5fa89dc6ac9c1b091ab"
+    },
+    {
+      "slot_id": "8f54c4c7229c4779cac8cda7c18a2f355002fff7fec1346b4ff6a22ea1ec75a2",
+      "kind": "freeze",
+      "reference_job_id": "bbb550fac610aa7260a032090a0741ee42675da57736be89d7ec7e49b55796f5",
+      "candidate_job_id": "21a8b75bab56490db80077c4a839dca9885c0b7974debf267048658f536af809",
+      "lineage_hash": "1f240fba76b403585d2d1fd19a96d858e2a7ad64f06dc78820d0a454a82a3791",
+      "treatment_hash": "380780b385440881150df97765b82cc08a80acdc4715fd1f14e2c41eab3b511b",
+      "perceptual_rule_id": "0d3331e2bd398d98ecfdf56bd4100e82a87e1dd8cb6bd5fa89dc6ac9c1b091ab"
+    },
+    {
+      "slot_id": "7668827b06041cfdf733d675ad2b3ccd4c7e4c9c7e2f04f2d23ab622bc26146c",
+      "kind": "freeze",
+      "reference_job_id": "759f1ee0a8a756c495b3a282f8f214973eadd78f98be305d7be805a50798a55a",
+      "candidate_job_id": "1e59f952d0215e076eade02db9ae096d4636c17274d63a0e513beea88febd899",
+      "lineage_hash": "3f00c5db8b5945cbdb46067e06cf4a371f2aab436ece06d2eedbba07ba2a5740",
+      "treatment_hash": "c69130a5db65fcf07bf250202185da634676dbd0a94bc5d0c16e85efe037d3fc",
+      "perceptual_rule_id": "0d3331e2bd398d98ecfdf56bd4100e82a87e1dd8cb6bd5fa89dc6ac9c1b091ab"
+    },
+    {
+      "slot_id": "6f994df625a2292561fab1a150e5b4d64b50315a79cd4bb313e59831d51debc0",
+      "kind": "freeze",
+      "reference_job_id": "81af4d48d59035d6dfe79f761b103c4467f7a41f1224de009974519ae667d4b5",
+      "candidate_job_id": "47a2ed10e4e7f12c2e00379c47f6757c6fdd58c83ad45c2d68d811c74aead008",
+      "lineage_hash": "9ed2d4e7c5f7ff58ee50afb49a5aa3c17e7a15c8da6637f877cd54ca42a9d47a",
+      "treatment_hash": "9a2c8729af5a2459e27ce7d7e45110f5263cf55d8e2f4cf8730137b677d1e806",
+      "perceptual_rule_id": "0d3331e2bd398d98ecfdf56bd4100e82a87e1dd8cb6bd5fa89dc6ac9c1b091ab"
+    },
+    {
+      "slot_id": "32db8bb130734bec07f83b3c4ad324513afa2b4b6a051aefaea5656809e0ab95",
+      "kind": "freeze",
+      "reference_job_id": "cf9613752795006690b752dd34eaa292cac0a7cf2a8c1eebd8efd07c4ec13409",
+      "candidate_job_id": "4b1faf5da3889f5da87269ae397d447e953b44cc94dea6bbac01057d444ff5b3",
+      "lineage_hash": "2960f1129b92856d807770c65b0a2b2c88e3e2c326571d30986f6dc01521314c",
+      "treatment_hash": "a03ac943972922d373c10d635b76ed0bc0bcc87150b69dcd7c4873cc74d70a35",
+      "perceptual_rule_id": "0d3331e2bd398d98ecfdf56bd4100e82a87e1dd8cb6bd5fa89dc6ac9c1b091ab"
+    },
+    {
+      "slot_id": "2fef31015105b3548b2e1ddf7066d62a5fc6ef4905360df306fb1f1b92741a68",
+      "kind": "freeze",
+      "reference_job_id": "ce16727de3770402f5972aba7acfbdc3ae32470b5f8cfb778a3a9cf4c6b25b6a",
+      "candidate_job_id": "d14add980d8ae87a6d2062f0d1cdc29d58aa9a4a3f6b23f8f4d441431c84b97e",
+      "lineage_hash": "be500bae3afca3eff067b5164451e08a1ee2b5a81e6deaf5561864dccd030108",
+      "treatment_hash": "1b0ff0f4f1a951c7f5c22b2cf4c8e7474033a6dd3a3dbd0fc713e75ee93a355a",
+      "perceptual_rule_id": "0d3331e2bd398d98ecfdf56bd4100e82a87e1dd8cb6bd5fa89dc6ac9c1b091ab"
+    },
+    {
+      "slot_id": "4cb1ff3a8965096161ede90e878334fb886164ba6b24632ea7b2dfaa74cb94c9",
+      "kind": "freeze",
+      "reference_job_id": "aef10a36e9119f2a273bfa9309b5dd0313d3cd767aac55799daab520f10720d7",
+      "candidate_job_id": "812c505a4c56ccc5643dfc403f6299ddce7e8b3dc2bbd91ede0b23098481a807",
+      "lineage_hash": "d0bf730aa56d348b77844e2a6457b4883fe3d1f92e7e29020df9a590d1f20c7e",
+      "treatment_hash": "85958d5629520b3a38ea021de4b4e88316b6474dfd41429c569344969101df23",
+      "perceptual_rule_id": "0d3331e2bd398d98ecfdf56bd4100e82a87e1dd8cb6bd5fa89dc6ac9c1b091ab"
+    },
+    {
+      "slot_id": "ee236304f29d019c1c6f06b677becdded703c37ebee2be44fb3f1afd912d7a9f",
+      "kind": "freeze",
+      "reference_job_id": "99df29b294239f33e7de762ee0e81cb685806b93294ded4b72ef365ef65b86ea",
+      "candidate_job_id": "b317bc922c1f7ceed7ba53d37d10b32b2db3670edb2227538cac1c3b3113646e",
+      "lineage_hash": "9c71150b9c2c7b927e078030653bc9ad609c00a82ea78ff8c462f1992f27b507",
+      "treatment_hash": "cc041a6bbe8434a35962560c1d6e9d83f4e3b5ea7dce5423b7d57f6ed09a9e08",
+      "perceptual_rule_id": "0d3331e2bd398d98ecfdf56bd4100e82a87e1dd8cb6bd5fa89dc6ac9c1b091ab"
+    },
+    {
+      "slot_id": "9b47b3bcac3fa3fecf5b65be6fe40f39016f0aeeb4db7104f5fff7fd8ca27975",
+      "kind": "blur_mild",
+      "reference_job_id": "99e7964b92d8b8c86f8cfb4291db8dee7ef90ef03ef2980f146c73d1af95f9d5",
+      "candidate_job_id": "50125d39ba980c46d7970084f2f4f757e51ca53f674a5222310e52791d282fea",
+      "lineage_hash": "48fc777986f6c5058f67dad3300f5298089af46c3ef1893b06f1d0befd987829",
+      "treatment_hash": "ff86c2346fb92bbbdf52b632ce82c2555c432a14a7d1b210e46c9356d00f2a66",
+      "perceptual_rule_id": "f111823f019f13ce543054c0e69068a1321501404c5c68d4a1cf28d0b1e3e4bc"
+    },
+    {
+      "slot_id": "c335d2d349549d41648d334517924ff81b918a4cc4ad5d7ea2ba910dd53bd4a1",
+      "kind": "blur_mild",
+      "reference_job_id": "22139c6d6d954edd0efd9142fd962010a8c7fd0d40690009c4f145bd11d5c103",
+      "candidate_job_id": "895db1b966eab8de66b486ae08f481d0f52d194ae8c71d8fe84baf0837933ea4",
+      "lineage_hash": "9063728e8e1c42f7bd04da1e5090258c8c3b2eb55e2dd358e8c72cf58e760501",
+      "treatment_hash": "b8f7bba309f2478038d2d975a4bf8a767e4fe990cb4f7d4237e591c1b649f277",
+      "perceptual_rule_id": "f111823f019f13ce543054c0e69068a1321501404c5c68d4a1cf28d0b1e3e4bc"
+    },
+    {
+      "slot_id": "d74a339c742670d68ac6cf35a963aa476bc5489522efde2ad715f9fc6c0e42cf",
+      "kind": "blur_mild",
+      "reference_job_id": "1243cde69dc7bfe7beedeb14ad5a411f5ab00415c32e5df56fa2e0602d91cac8",
+      "candidate_job_id": "6255070d996a432fe342ae2441bbddcd74ca520fde5e19087390cba45b3a2e75",
+      "lineage_hash": "c73096574cf47b3ea70b08d20abab43b21ccebffb4c5dd2fca384fc103c3e8e3",
+      "treatment_hash": "4e9ed9b538f078f7b89eebb03d5e6d1263a70e3c913fd0d23bd985e2d9ff3b8e",
+      "perceptual_rule_id": "f111823f019f13ce543054c0e69068a1321501404c5c68d4a1cf28d0b1e3e4bc"
+    },
+    {
+      "slot_id": "c41ef3cad2cf5bdba14b9c2c40fadfa67475f25f5274ec3cae45c75005b2c75a",
+      "kind": "blur_mild",
+      "reference_job_id": "2fa21924bc188fd8ca74162375bea24338a0ea15d1f0023d1dee7899bc7a727e",
+      "candidate_job_id": "0695719538bf69491a9d5fb6c3baa2166825b333726f7f9ba6abf8218961eb90",
+      "lineage_hash": "d700fa7e46c9146182dc8f699d3e9bbc7dada05a6adb232559952825203af56d",
+      "treatment_hash": "66f14d75d4475f48ff9298a95746548a48ee58fc5838cccdb693162d5e9f44d1",
+      "perceptual_rule_id": "f111823f019f13ce543054c0e69068a1321501404c5c68d4a1cf28d0b1e3e4bc"
+    },
+    {
+      "slot_id": "5da63768eb872b933c73f2a79ec4d401b10b86cf47a970b3a03320a720c5ebdb",
+      "kind": "blur_mild",
+      "reference_job_id": "2709d6388546ee1900ab40c18fe0746b728114ba78adc35aab79ce178f1108dc",
+      "candidate_job_id": "b1bbb0f91c042112fb9ca2b45a2530ebab0c74896190f828cfd7e69990a69480",
+      "lineage_hash": "142841c1b834707c8e4240c49f79978155bfcf0311bc55eac5d260e009ad9097",
+      "treatment_hash": "e88ce3e153c3229cc162bbaac40a1b5239b268b919f1d9a4c913dbab9d460478",
+      "perceptual_rule_id": "f111823f019f13ce543054c0e69068a1321501404c5c68d4a1cf28d0b1e3e4bc"
+    },
+    {
+      "slot_id": "ac71c4c801638ad87d85f21da14b7e05d3b8cc2327c2e16fa7e30b8226cf9be5",
+      "kind": "blur_mild",
+      "reference_job_id": "e4dad6a06476f0d21a0c31c36ffabc3338d80333f7cc4f9f2e766b7e30464b23",
+      "candidate_job_id": "ef68d2448089dfb53431b79b107848d92294a24ff11ee3e499d25e9bfaf4932a",
+      "lineage_hash": "9137b6371670e5721a928d64cc24b955f1781f2097db42cfbc3f1589e0a2f957",
+      "treatment_hash": "423864c8d195e543eb0c620b740450b2ad74f3fafffc79a3bd1960b6ef8fae2e",
+      "perceptual_rule_id": "f111823f019f13ce543054c0e69068a1321501404c5c68d4a1cf28d0b1e3e4bc"
+    },
+    {
+      "slot_id": "c21f3ed30c53184989d7d5ebdd9eddb7373f2a83f9ea878b6897460590035d1b",
+      "kind": "blur_mild",
+      "reference_job_id": "79ebe33b8e3a7a9aedc8ada642d4a70b7f220dc794d6edf79e2cae07123f3f2b",
+      "candidate_job_id": "5241a4caaf7aba612349710ec89c6e7c8c36c2e90c68d46199afb0f8ebd237c0",
+      "lineage_hash": "4de765e1eb41be00ffe3e5355fa05afe163836e4850c1640cece06673ac1871a",
+      "treatment_hash": "9b46795d1d9e45f929f24cc66f583f5a9612f093ba1de81ec542a99efcc6f566",
+      "perceptual_rule_id": "f111823f019f13ce543054c0e69068a1321501404c5c68d4a1cf28d0b1e3e4bc"
+    },
+    {
+      "slot_id": "8bdec18b80d21fc47fdac4309be4f4cbdc0af6182db0b685fd1028ed075c3baf",
+      "kind": "blur_mild",
+      "reference_job_id": "330a2fdbb9e1400e3f6821838e1e5991a76d37df36921381271155dd2402b071",
+      "candidate_job_id": "bfe39f8672fb985d5850d8161c58a99d7d331724cda85dfa5a782c4c979ddf64",
+      "lineage_hash": "076b399628f8e1176c4c25d1a7df0e640e4e8d240f5977e368075637b01448ee",
+      "treatment_hash": "d7116cf14f4001d57be9c976b69bff4e8ee5c944759c85af58e73dc7bb209851",
+      "perceptual_rule_id": "f111823f019f13ce543054c0e69068a1321501404c5c68d4a1cf28d0b1e3e4bc"
+    },
+    {
+      "slot_id": "61e2a64d50696d6b4b3b5ca17b1ff7d4cee2524b5c5aaef5681b19944d25737f",
+      "kind": "blur_severe",
+      "reference_job_id": "99e7964b92d8b8c86f8cfb4291db8dee7ef90ef03ef2980f146c73d1af95f9d5",
+      "candidate_job_id": "7d026ff2515a3ede88c36e3e482a70839e85e3dbf79fccca832bcb974455e568",
+      "lineage_hash": "48fc777986f6c5058f67dad3300f5298089af46c3ef1893b06f1d0befd987829",
+      "treatment_hash": "12f632e2401a418235b741f8a5787e88fa357354e72d07a965cd5f139f1f54a4",
+      "perceptual_rule_id": "c54cead303343655f3e57bba518963ad20f01e97edb6d5812a53b03766f6574f"
+    },
+    {
+      "slot_id": "4368d1be75bf773960763d4120adb7289be977ad5b381f8fbfc6a439de16432d",
+      "kind": "blur_severe",
+      "reference_job_id": "22139c6d6d954edd0efd9142fd962010a8c7fd0d40690009c4f145bd11d5c103",
+      "candidate_job_id": "5b6a91f47d360e92be41e3e477795a7256e78588360d878bf6f0a4ed8b42e2ae",
+      "lineage_hash": "9063728e8e1c42f7bd04da1e5090258c8c3b2eb55e2dd358e8c72cf58e760501",
+      "treatment_hash": "18686ee181d6e4316c5513558e29731ff5beb8f8e0d6669d08d78b21da93c7e4",
+      "perceptual_rule_id": "c54cead303343655f3e57bba518963ad20f01e97edb6d5812a53b03766f6574f"
+    },
+    {
+      "slot_id": "c99b9cb7179ca1fe327ec6dff19dbf3a2268378bc1cfc25067efed778e1a6077",
+      "kind": "blur_severe",
+      "reference_job_id": "1243cde69dc7bfe7beedeb14ad5a411f5ab00415c32e5df56fa2e0602d91cac8",
+      "candidate_job_id": "79748338980edce0c25338de67adaac88711aea2bb80da8b630e64276e0828fd",
+      "lineage_hash": "c73096574cf47b3ea70b08d20abab43b21ccebffb4c5dd2fca384fc103c3e8e3",
+      "treatment_hash": "d19750f9de3fc7873fe11239f15afb63325438564753e5b614c375d7a774ca17",
+      "perceptual_rule_id": "c54cead303343655f3e57bba518963ad20f01e97edb6d5812a53b03766f6574f"
+    },
+    {
+      "slot_id": "9b23f134231c4c9b7a9e19b050fb4693ce46039af566b10e4846691e6e27037d",
+      "kind": "blur_severe",
+      "reference_job_id": "2fa21924bc188fd8ca74162375bea24338a0ea15d1f0023d1dee7899bc7a727e",
+      "candidate_job_id": "dfe6e0ba36cce5d53d51df4f80613ae0a490c11f0fface50cd5cd38760b8d838",
+      "lineage_hash": "d700fa7e46c9146182dc8f699d3e9bbc7dada05a6adb232559952825203af56d",
+      "treatment_hash": "7810a2adfe1f935d589cb13182ac8f007926f1ff1a0e038d7aedc7bc8a985eb4",
+      "perceptual_rule_id": "c54cead303343655f3e57bba518963ad20f01e97edb6d5812a53b03766f6574f"
+    },
+    {
+      "slot_id": "07315bdff86ffbc92370cb5cca2cb16d1a23a6aba362c5966e94430c66168fdf",
+      "kind": "blur_severe",
+      "reference_job_id": "2709d6388546ee1900ab40c18fe0746b728114ba78adc35aab79ce178f1108dc",
+      "candidate_job_id": "d3509cc427174866b91a357708e4731ac65cb51f77c03ba93dcaaf5f42360c50",
+      "lineage_hash": "142841c1b834707c8e4240c49f79978155bfcf0311bc55eac5d260e009ad9097",
+      "treatment_hash": "37b618b9636c9b3e7814a4c2ad54a62e5a706eae37b0fd2ad5c20cb207a37b5f",
+      "perceptual_rule_id": "c54cead303343655f3e57bba518963ad20f01e97edb6d5812a53b03766f6574f"
+    },
+    {
+      "slot_id": "15d2ffcf64f8eb86c26ade6289e8b8221812c91220cb9443fbd599ff7619e5f4",
+      "kind": "blur_severe",
+      "reference_job_id": "e4dad6a06476f0d21a0c31c36ffabc3338d80333f7cc4f9f2e766b7e30464b23",
+      "candidate_job_id": "95e850a3ab6b4f86c222600f654a4e6a3e7afe6e9fbcf35f00b43db061c43ef4",
+      "lineage_hash": "9137b6371670e5721a928d64cc24b955f1781f2097db42cfbc3f1589e0a2f957",
+      "treatment_hash": "9028b293e838b93d8fb2c0c4c7fd758d0b87c4ea3708edce67baad25b376cc98",
+      "perceptual_rule_id": "c54cead303343655f3e57bba518963ad20f01e97edb6d5812a53b03766f6574f"
+    },
+    {
+      "slot_id": "c93737988df7635b5b9c54a3e2995911dd837f50e782d3e6b17135403e0a5300",
+      "kind": "blur_severe",
+      "reference_job_id": "79ebe33b8e3a7a9aedc8ada642d4a70b7f220dc794d6edf79e2cae07123f3f2b",
+      "candidate_job_id": "dc2ac73b0ab3194945141c4398fdb939f5bbd5589a069b62a09a6d46dceefd3a",
+      "lineage_hash": "4de765e1eb41be00ffe3e5355fa05afe163836e4850c1640cece06673ac1871a",
+      "treatment_hash": "3ef826b15084e69798436f5df854384ca25777dbb13cd4ec04e434867005fdbb",
+      "perceptual_rule_id": "c54cead303343655f3e57bba518963ad20f01e97edb6d5812a53b03766f6574f"
+    },
+    {
+      "slot_id": "b4a2f7c65305b06ad1e76334b43917263d3efa949aff83fb0995c13bb4d4fc4a",
+      "kind": "blur_severe",
+      "reference_job_id": "330a2fdbb9e1400e3f6821838e1e5991a76d37df36921381271155dd2402b071",
+      "candidate_job_id": "a329cca8e7d0d765eb0b884482351a3ba47f58b127d2267215913f14e0d7c11d",
+      "lineage_hash": "076b399628f8e1176c4c25d1a7df0e640e4e8d240f5977e368075637b01448ee",
+      "treatment_hash": "ec4c11b21c7f505e816338e5757eee84dae2d2dbfee03f25435156fc7af57596",
+      "perceptual_rule_id": "c54cead303343655f3e57bba518963ad20f01e97edb6d5812a53b03766f6574f"
+    },
+    {
+      "slot_id": "24fb93ce94c09a948e9173d9b0340a663d662b6711afd1576a644d0e6aa346ef",
+      "kind": "shuffle",
+      "reference_job_id": "8eba2ff29c0fdcd2c941eba9cd8761708e8ddb958015d80fce97deacf64754d9",
+      "candidate_job_id": "5002ba3c7a66dd269dff2d3fdcf3bf2c30359ac7881c7b5d73c749cf64df6a38",
+      "lineage_hash": "902058693868c19b981abea158202c5dbaa85e3605928d05a456e83f680f76f5",
+      "treatment_hash": "148435db28390ebb1d86301abd57a559dd02b6784229b33f8168f65e33db1b81",
+      "perceptual_rule_id": "8672849983946c6388fc352544e6c6976d21d5148bb006c75310483e71138fdb"
+    },
+    {
+      "slot_id": "ce5ad1279e709d75117043aa68f97bc7ce8ff05d3569439f1620e97f1e9b299e",
+      "kind": "shuffle",
+      "reference_job_id": "bbb550fac610aa7260a032090a0741ee42675da57736be89d7ec7e49b55796f5",
+      "candidate_job_id": "91e240ebd4e1149180f181179ba8be099a0767ea5a3028bf60acd8a8637fedd5",
+      "lineage_hash": "1f240fba76b403585d2d1fd19a96d858e2a7ad64f06dc78820d0a454a82a3791",
+      "treatment_hash": "7bed1dfa72f7f84f7b08691897a15647ba07f3e0aa92eb39e49776caae1d893d",
+      "perceptual_rule_id": "8672849983946c6388fc352544e6c6976d21d5148bb006c75310483e71138fdb"
+    },
+    {
+      "slot_id": "bfcb407893a24d1a6e1ba33cdad7c882bb4c43dd683d78b80fc6c3c30082152b",
+      "kind": "shuffle",
+      "reference_job_id": "759f1ee0a8a756c495b3a282f8f214973eadd78f98be305d7be805a50798a55a",
+      "candidate_job_id": "4e2353f541fcc9f23eab8228fb527edadfcc36882cbdda9c46cb2a0d52274376",
+      "lineage_hash": "3f00c5db8b5945cbdb46067e06cf4a371f2aab436ece06d2eedbba07ba2a5740",
+      "treatment_hash": "b8f568874dd4188744742941a80782ad9cd7326258e4a7965b10174f7a4972f2",
+      "perceptual_rule_id": "8672849983946c6388fc352544e6c6976d21d5148bb006c75310483e71138fdb"
+    },
+    {
+      "slot_id": "4583a02a91352ccda56bf4a360b4c911e209c57850e3e0eb7f4050d734de4a84",
+      "kind": "shuffle",
+      "reference_job_id": "81af4d48d59035d6dfe79f761b103c4467f7a41f1224de009974519ae667d4b5",
+      "candidate_job_id": "bba8b118d7c8ea4969770b11e3ad4739413da9aaf485829d5fe80982b7dbde52",
+      "lineage_hash": "9ed2d4e7c5f7ff58ee50afb49a5aa3c17e7a15c8da6637f877cd54ca42a9d47a",
+      "treatment_hash": "19f5b176f3d19031891196c6cb26157f3a21357acd7e67a27d10f43072d33998",
+      "perceptual_rule_id": "8672849983946c6388fc352544e6c6976d21d5148bb006c75310483e71138fdb"
+    },
+    {
+      "slot_id": "8a45e0b7bcd7fa8676c1a6b6a9b8f5dbe0766f255b3452a9cc8262e21a4a282c",
+      "kind": "shuffle",
+      "reference_job_id": "cf9613752795006690b752dd34eaa292cac0a7cf2a8c1eebd8efd07c4ec13409",
+      "candidate_job_id": "6f2d4f4915e674f152a60d994a799ed7c89fcd4e47b38d95b214a4c31fa46b4e",
+      "lineage_hash": "2960f1129b92856d807770c65b0a2b2c88e3e2c326571d30986f6dc01521314c",
+      "treatment_hash": "60a8d929fb88726315a620ab5420f0600fd2cb50e84823ac3cc07d444c2f32ff",
+      "perceptual_rule_id": "8672849983946c6388fc352544e6c6976d21d5148bb006c75310483e71138fdb"
+    },
+    {
+      "slot_id": "3c0b6d8a2fda8176ef5ba6603f18de71a56bb9434c67f4a167933b1447b7a3ea",
+      "kind": "shuffle",
+      "reference_job_id": "ce16727de3770402f5972aba7acfbdc3ae32470b5f8cfb778a3a9cf4c6b25b6a",
+      "candidate_job_id": "4819bad279e2c950880dbcfac3a1db1c9f0bd300a76b67d198a6ef871e7d1955",
+      "lineage_hash": "be500bae3afca3eff067b5164451e08a1ee2b5a81e6deaf5561864dccd030108",
+      "treatment_hash": "5fbdbd02c441b4dc333d332ac4330e7c535be6aed45e8e4ceba78a3862accc67",
+      "perceptual_rule_id": "8672849983946c6388fc352544e6c6976d21d5148bb006c75310483e71138fdb"
+    },
+    {
+      "slot_id": "8c3ac9b1bacc10260ab5b5634e995abd05d5e5857cea302e52b5e4cf98252d44",
+      "kind": "shuffle",
+      "reference_job_id": "aef10a36e9119f2a273bfa9309b5dd0313d3cd767aac55799daab520f10720d7",
+      "candidate_job_id": "4a3234e78a57e6c51842a2dcfbca62437d6ea1799b62f085f4889fcb1ac22fcc",
+      "lineage_hash": "d0bf730aa56d348b77844e2a6457b4883fe3d1f92e7e29020df9a590d1f20c7e",
+      "treatment_hash": "7a175be3669a3828b8b13cf94866897c5b35b2c13a9680941454474cf88dfea1",
+      "perceptual_rule_id": "8672849983946c6388fc352544e6c6976d21d5148bb006c75310483e71138fdb"
+    },
+    {
+      "slot_id": "a1fb5ccfddb1e3edb92611a93081457f968ce2d9a998dde131fadb55c7a7de66",
+      "kind": "shuffle",
+      "reference_job_id": "99df29b294239f33e7de762ee0e81cb685806b93294ded4b72ef365ef65b86ea",
+      "candidate_job_id": "a7cb53cb8049002368806c17176ba03a2a2aa3563b5e0ab12758aa308f236853",
+      "lineage_hash": "9c71150b9c2c7b927e078030653bc9ad609c00a82ea78ff8c462f1992f27b507",
+      "treatment_hash": "3d6d9902a954b83701c85c31e61ef2d3f6f9ee2d25ebf3d37145e1e99c66bc6f",
+      "perceptual_rule_id": "8672849983946c6388fc352544e6c6976d21d5148bb006c75310483e71138fdb"
+    },
+    {
+      "slot_id": "c2d86cfa9e2cfe5abb3275768821b05785d1c81d80773855617456c27baab4ae",
+      "kind": "wrong_video",
+      "reference_job_id": "99e7964b92d8b8c86f8cfb4291db8dee7ef90ef03ef2980f146c73d1af95f9d5",
+      "candidate_job_id": "8eba2ff29c0fdcd2c941eba9cd8761708e8ddb958015d80fce97deacf64754d9",
+      "lineage_hash": "b9a56ddf8d11475495ca3595f1fb6cffe48bbee60041065fa841ae417d253e2b",
+      "treatment_hash": "71dfd1b19127b9744c94fdd29e4b232f1e7923224ba61fc1807471a4d8bf0c3d",
+      "perceptual_rule_id": "069b78b4e73f33cb6006207871602d433cf716c03e2fdddb70bf3c7159881f87"
+    },
+    {
+      "slot_id": "0e5745a0c0e0b78e1443ff82f525421743efc51a3c986f38aca28d2d0d2526a4",
+      "kind": "wrong_video",
+      "reference_job_id": "22139c6d6d954edd0efd9142fd962010a8c7fd0d40690009c4f145bd11d5c103",
+      "candidate_job_id": "bbb550fac610aa7260a032090a0741ee42675da57736be89d7ec7e49b55796f5",
+      "lineage_hash": "93d8175559a94bfb4f963e64b6d776ca0e87b57e7bce287b0ccb8c69d7fe60dd",
+      "treatment_hash": "00e9006d379dc4530342f75850a864b5d6edc20f94b39f3fde4310afa11f1542",
+      "perceptual_rule_id": "069b78b4e73f33cb6006207871602d433cf716c03e2fdddb70bf3c7159881f87"
+    },
+    {
+      "slot_id": "328a4f7e920f1bbeb82305659887c19c21f8211651c8813e8667d9584809c730",
+      "kind": "wrong_video",
+      "reference_job_id": "1243cde69dc7bfe7beedeb14ad5a411f5ab00415c32e5df56fa2e0602d91cac8",
+      "candidate_job_id": "759f1ee0a8a756c495b3a282f8f214973eadd78f98be305d7be805a50798a55a",
+      "lineage_hash": "24023aa074381cd48042877e403d36411b05ffbdbaf38917f3e3d8e7f00614f8",
+      "treatment_hash": "ce912860734f7b1dd7a2c057d3af1676e434e12e428caf2974073759841a4254",
+      "perceptual_rule_id": "069b78b4e73f33cb6006207871602d433cf716c03e2fdddb70bf3c7159881f87"
+    },
+    {
+      "slot_id": "7a71d03f1bf35e33c56e2058de79b864dafe8f3007acaf35618bb03b41bab25d",
+      "kind": "wrong_video",
+      "reference_job_id": "2fa21924bc188fd8ca74162375bea24338a0ea15d1f0023d1dee7899bc7a727e",
+      "candidate_job_id": "81af4d48d59035d6dfe79f761b103c4467f7a41f1224de009974519ae667d4b5",
+      "lineage_hash": "d7e2987df6ef6a5d700438c30a8872997de83e5b2bf488b653aeb5b7828e073a",
+      "treatment_hash": "3d038de19df8894e046cb035c19c856195d95d561a8555dd311cd277c2076d54",
+      "perceptual_rule_id": "069b78b4e73f33cb6006207871602d433cf716c03e2fdddb70bf3c7159881f87"
+    },
+    {
+      "slot_id": "a269d8cd47d93dde7300367fc4bcadfe27a2bf9d179235f67239d2cc10401cd7",
+      "kind": "wrong_video",
+      "reference_job_id": "2709d6388546ee1900ab40c18fe0746b728114ba78adc35aab79ce178f1108dc",
+      "candidate_job_id": "cf9613752795006690b752dd34eaa292cac0a7cf2a8c1eebd8efd07c4ec13409",
+      "lineage_hash": "c751b832bc56a744b56b95ad1ccd37ae98587bc2ae06dd4f13022ecbb5f7b577",
+      "treatment_hash": "9fc21c53a4a6524bb9ebcd40595a1f9cbd3fd151ec065caa7adb6d444bb11adf",
+      "perceptual_rule_id": "069b78b4e73f33cb6006207871602d433cf716c03e2fdddb70bf3c7159881f87"
+    },
+    {
+      "slot_id": "cc680c85305b3f98c354d77c3a1455eed02b857ea4d18466015c2f21356a4e3f",
+      "kind": "wrong_video",
+      "reference_job_id": "e4dad6a06476f0d21a0c31c36ffabc3338d80333f7cc4f9f2e766b7e30464b23",
+      "candidate_job_id": "ce16727de3770402f5972aba7acfbdc3ae32470b5f8cfb778a3a9cf4c6b25b6a",
+      "lineage_hash": "25a144c184c8155f2de84b55949edd74990c53d3676fabd1a5969e6c631c51c2",
+      "treatment_hash": "71aa8ae771c58b326eb653b627152faf35bc12a7718eb99cfcd48b7f08c492e8",
+      "perceptual_rule_id": "069b78b4e73f33cb6006207871602d433cf716c03e2fdddb70bf3c7159881f87"
+    },
+    {
+      "slot_id": "9a1d78061d06723895784dbc041198c44b6d6615973da2638ff7b8cafe53ccef",
+      "kind": "wrong_video",
+      "reference_job_id": "79ebe33b8e3a7a9aedc8ada642d4a70b7f220dc794d6edf79e2cae07123f3f2b",
+      "candidate_job_id": "aef10a36e9119f2a273bfa9309b5dd0313d3cd767aac55799daab520f10720d7",
+      "lineage_hash": "1517ddf4737f2851f42612727a7cb09073d2450b6eb9288aa985262ceaa75439",
+      "treatment_hash": "fe2fc679873f27bbab994a94b9f2a58b9a67a03fdf1f8e6bd4b7b2bc4a60386f",
+      "perceptual_rule_id": "069b78b4e73f33cb6006207871602d433cf716c03e2fdddb70bf3c7159881f87"
+    },
+    {
+      "slot_id": "8e0afe2d4350501d56cc216afeb2c8a2ebdd1dc60b768483ca29e4bf93d889ef",
+      "kind": "wrong_video",
+      "reference_job_id": "330a2fdbb9e1400e3f6821838e1e5991a76d37df36921381271155dd2402b071",
+      "candidate_job_id": "99df29b294239f33e7de762ee0e81cb685806b93294ded4b72ef365ef65b86ea",
+      "lineage_hash": "0e01636d56cd65f4cc5924832809edd7d4337582786ef933b8459a76abe55ac1",
+      "treatment_hash": "3a2860445aedcdb8ea07f43c614d6b60ee2e66992d8887b829a749792d36ebdc",
+      "perceptual_rule_id": "069b78b4e73f33cb6006207871602d433cf716c03e2fdddb70bf3c7159881f87"
+    },
+    {
+      "slot_id": "5d7bf9b4de7a18f2602ac162fe2770ada732025b483ba4ef26622462a073d148",
+      "kind": "detail_loss",
+      "reference_job_id": "99e7964b92d8b8c86f8cfb4291db8dee7ef90ef03ef2980f146c73d1af95f9d5",
+      "candidate_job_id": "51835ec4c0ef1196ecaacf75d9269072bb2f1af63cc7fdac2e3814ed5619fe06",
+      "lineage_hash": "48fc777986f6c5058f67dad3300f5298089af46c3ef1893b06f1d0befd987829",
+      "treatment_hash": "a132dc42a8d7c3152c2d3b36b68fafd59ae617d15dbe9ba95ce5fe9dda988b9b",
+      "perceptual_rule_id": "1ad46051410d86647b19ada825321468b5306e15e03e77c95d14f27342baaa3d"
+    },
+    {
+      "slot_id": "4cdbd0242b5d072e200b746c3e83fa0d34b66966e464fa6c749b189107595c18",
+      "kind": "detail_loss",
+      "reference_job_id": "22139c6d6d954edd0efd9142fd962010a8c7fd0d40690009c4f145bd11d5c103",
+      "candidate_job_id": "97aac834454ddfa3ce7094e09eaad30c5c395908de76062d5ad2542d286b27b0",
+      "lineage_hash": "9063728e8e1c42f7bd04da1e5090258c8c3b2eb55e2dd358e8c72cf58e760501",
+      "treatment_hash": "29fa36b87bc88c34a76c015e05772126443aaf92ccb38b14d32e9ec6604970ec",
+      "perceptual_rule_id": "1ad46051410d86647b19ada825321468b5306e15e03e77c95d14f27342baaa3d"
+    },
+    {
+      "slot_id": "5006de168001a2c8b286d4834f2750f932a72bec65737fc6fcd5b4a531ae0a8b",
+      "kind": "detail_loss",
+      "reference_job_id": "1243cde69dc7bfe7beedeb14ad5a411f5ab00415c32e5df56fa2e0602d91cac8",
+      "candidate_job_id": "d2f46cdd67900e9422f0ce454a8242f8674c1ba5db9d01158978dbd47e4f7a8a",
+      "lineage_hash": "c73096574cf47b3ea70b08d20abab43b21ccebffb4c5dd2fca384fc103c3e8e3",
+      "treatment_hash": "6e3228c18fc020256801be5bed9a749dd8a6c9115f2a228acdc3352cf2cb7b14",
+      "perceptual_rule_id": "1ad46051410d86647b19ada825321468b5306e15e03e77c95d14f27342baaa3d"
+    },
+    {
+      "slot_id": "235e516373ed07813a99c202e9d81627815a9dc4031dae129604b6378b67415c",
+      "kind": "detail_loss",
+      "reference_job_id": "2fa21924bc188fd8ca74162375bea24338a0ea15d1f0023d1dee7899bc7a727e",
+      "candidate_job_id": "4d5aeb3c1996339d6974b9bf23288d2b4687dcae4448e07d00a148f3d5717e00",
+      "lineage_hash": "d700fa7e46c9146182dc8f699d3e9bbc7dada05a6adb232559952825203af56d",
+      "treatment_hash": "c410c6248e0e11043fe31bd5a658447bd1dc99683b5ad739c7a6ddaf8cb689d3",
+      "perceptual_rule_id": "1ad46051410d86647b19ada825321468b5306e15e03e77c95d14f27342baaa3d"
+    },
+    {
+      "slot_id": "bde20541969e2473314ffee8c7f3039561f3a5d5d02e2f39bbfabc3943ec9774",
+      "kind": "detail_loss",
+      "reference_job_id": "2709d6388546ee1900ab40c18fe0746b728114ba78adc35aab79ce178f1108dc",
+      "candidate_job_id": "e884ac60f6dd2b76dbf8906823d6336570b9cc80a8fc6a7435cf216281e2243f",
+      "lineage_hash": "142841c1b834707c8e4240c49f79978155bfcf0311bc55eac5d260e009ad9097",
+      "treatment_hash": "a41e6ecf492aa66cc08f1f602a72679959cbb8c14b4eff4ae8b6168afb1972e4",
+      "perceptual_rule_id": "1ad46051410d86647b19ada825321468b5306e15e03e77c95d14f27342baaa3d"
+    },
+    {
+      "slot_id": "5dc58d00f75b6127b573a81696bbb9f0fbf451935eb0e6933f74b64376b73b60",
+      "kind": "detail_loss",
+      "reference_job_id": "e4dad6a06476f0d21a0c31c36ffabc3338d80333f7cc4f9f2e766b7e30464b23",
+      "candidate_job_id": "ef8dbcc0a2141e0f556614563239697cb99245f6b63890028f9815e94412903e",
+      "lineage_hash": "9137b6371670e5721a928d64cc24b955f1781f2097db42cfbc3f1589e0a2f957",
+      "treatment_hash": "4a1c77533f49592164c6282383081335fcfcfa4075f57c10f4ebd26e420a1a0e",
+      "perceptual_rule_id": "1ad46051410d86647b19ada825321468b5306e15e03e77c95d14f27342baaa3d"
+    },
+    {
+      "slot_id": "95cbdd0b055e4b226f0bdb13982e562ab2771968e477aa8caf8781d1b3cced8d",
+      "kind": "detail_loss",
+      "reference_job_id": "79ebe33b8e3a7a9aedc8ada642d4a70b7f220dc794d6edf79e2cae07123f3f2b",
+      "candidate_job_id": "c374bc8dafb208182b312a3ec44fb6253674d2ac7d58118fe512e24b749d1acc",
+      "lineage_hash": "4de765e1eb41be00ffe3e5355fa05afe163836e4850c1640cece06673ac1871a",
+      "treatment_hash": "c3c16f3ae0e6405409e9c3d7d7cbd1fd6df7e39afaaca7aa2aa8af6b7d3dff7e",
+      "perceptual_rule_id": "1ad46051410d86647b19ada825321468b5306e15e03e77c95d14f27342baaa3d"
+    },
+    {
+      "slot_id": "af4c3cc103ad5fd11cbbeb4ea394d04559ca6195ac9a088a737cd851c1405c84",
+      "kind": "detail_loss",
+      "reference_job_id": "330a2fdbb9e1400e3f6821838e1e5991a76d37df36921381271155dd2402b071",
+      "candidate_job_id": "e557ca6ad4431a0cea0f7626db69b2edae065ab291fb51946511282d90f9c754",
+      "lineage_hash": "076b399628f8e1176c4c25d1a7df0e640e4e8d240f5977e368075637b01448ee",
+      "treatment_hash": "230cccc01bca1251b443f08017ffbd3f12d5979eac8c30a8591d04c30c034021",
+      "perceptual_rule_id": "1ad46051410d86647b19ada825321468b5306e15e03e77c95d14f27342baaa3d"
+    },
+    {
+      "slot_id": "d81b9f041b37b3011e02d6745b4a6146addb336184d25e29f688faa0443069ee",
+      "kind": "evaluator_attack_mild",
+      "reference_job_id": "99e7964b92d8b8c86f8cfb4291db8dee7ef90ef03ef2980f146c73d1af95f9d5",
+      "candidate_job_id": "11abe47a8f4700d01b52171268d2b84b9fa011003a888e0cfe530263ab2e3433",
+      "lineage_hash": "48fc777986f6c5058f67dad3300f5298089af46c3ef1893b06f1d0befd987829",
+      "treatment_hash": "0667b08ee5d8cb9da580dbb9047ff2a05a73c0afe5c049e87dddde11d728b60d",
+      "perceptual_rule_id": "5581061c1ad4462e02c6132505e42d7b59f8b8fd9f8fe1a562d3a30fe7f2b99e"
+    },
+    {
+      "slot_id": "0cbcec066d8a00d1c645824363cfe6a82f09f31ea00f01386eb2a8d18e0d4be4",
+      "kind": "evaluator_attack_mild",
+      "reference_job_id": "22139c6d6d954edd0efd9142fd962010a8c7fd0d40690009c4f145bd11d5c103",
+      "candidate_job_id": "2b7c8f866b54aaa84914cb80ba654b10f1251a78952a4432d546c0add31d7edc",
+      "lineage_hash": "9063728e8e1c42f7bd04da1e5090258c8c3b2eb55e2dd358e8c72cf58e760501",
+      "treatment_hash": "8bc50b5c95286a05f903120588cd346a53a45f50cc670a1dd20ccb24f472f968",
+      "perceptual_rule_id": "5581061c1ad4462e02c6132505e42d7b59f8b8fd9f8fe1a562d3a30fe7f2b99e"
+    },
+    {
+      "slot_id": "763d1b4a5590268cd6906b9f2ead5ec2c27b463bb1cbf9c495bbc1d809c589cc",
+      "kind": "evaluator_attack_mild",
+      "reference_job_id": "1243cde69dc7bfe7beedeb14ad5a411f5ab00415c32e5df56fa2e0602d91cac8",
+      "candidate_job_id": "826c5d6abcc8ce0a22bfb02fc1f8ddab90f8a75e8478cdf157d2a99369718fb8",
+      "lineage_hash": "c73096574cf47b3ea70b08d20abab43b21ccebffb4c5dd2fca384fc103c3e8e3",
+      "treatment_hash": "ab8ef7cc2e4af1557f8892cc5dba4528e77ee76a0a8b87408c0ef0ce9cd341fd",
+      "perceptual_rule_id": "5581061c1ad4462e02c6132505e42d7b59f8b8fd9f8fe1a562d3a30fe7f2b99e"
+    },
+    {
+      "slot_id": "3c0324104179fe894c1704a822169ff3f0bdcd45c68f3f09a6fd4460623f698f",
+      "kind": "evaluator_attack_mild",
+      "reference_job_id": "2fa21924bc188fd8ca74162375bea24338a0ea15d1f0023d1dee7899bc7a727e",
+      "candidate_job_id": "c075fb3c83dde417c16229e207758378c85be79e0c88cb8eb4a79c6da360d1e9",
+      "lineage_hash": "d700fa7e46c9146182dc8f699d3e9bbc7dada05a6adb232559952825203af56d",
+      "treatment_hash": "e7c4cb5e9bd87a82c0f15751b68e959d9ae5b189b74b12d5c5e865fe54b3a7d8",
+      "perceptual_rule_id": "5581061c1ad4462e02c6132505e42d7b59f8b8fd9f8fe1a562d3a30fe7f2b99e"
+    },
+    {
+      "slot_id": "fc7f39d3d9591284dbea78a5c825a29e317f09cda6e0a45a3f185b02cbe0e794",
+      "kind": "evaluator_attack_mild",
+      "reference_job_id": "2709d6388546ee1900ab40c18fe0746b728114ba78adc35aab79ce178f1108dc",
+      "candidate_job_id": "aa79e6dc3912ac2ce9e39589969ab5fa36f6f349d5af50b2c790ded00345df9f",
+      "lineage_hash": "142841c1b834707c8e4240c49f79978155bfcf0311bc55eac5d260e009ad9097",
+      "treatment_hash": "b454911cce5c5f652fd60e9833db9dfd9815ab4fb6a5c4863aa4c3bc08b32150",
+      "perceptual_rule_id": "5581061c1ad4462e02c6132505e42d7b59f8b8fd9f8fe1a562d3a30fe7f2b99e"
+    },
+    {
+      "slot_id": "36807c883bc0867d5654c563d542b674aa289797f85e1d2e83c51b2606ec4ac7",
+      "kind": "evaluator_attack_mild",
+      "reference_job_id": "e4dad6a06476f0d21a0c31c36ffabc3338d80333f7cc4f9f2e766b7e30464b23",
+      "candidate_job_id": "a5b81e7cd98db5f1195d8170e0ea0f7c55e757a997fdac51c36283d7e8ffe456",
+      "lineage_hash": "9137b6371670e5721a928d64cc24b955f1781f2097db42cfbc3f1589e0a2f957",
+      "treatment_hash": "7f7fb5b1969fc218ce34193c9e53366297c36960fddf78f92ff964bf09a4cd12",
+      "perceptual_rule_id": "5581061c1ad4462e02c6132505e42d7b59f8b8fd9f8fe1a562d3a30fe7f2b99e"
+    },
+    {
+      "slot_id": "c46d0bc41c85a59796f87aea43df9df4ecd7ebb303725d6ff72b92ce166969ad",
+      "kind": "evaluator_attack_mild",
+      "reference_job_id": "79ebe33b8e3a7a9aedc8ada642d4a70b7f220dc794d6edf79e2cae07123f3f2b",
+      "candidate_job_id": "2b79225608090aec6b4a400a6cbe756cf128815fb856cd945ca06ca044ec74f1",
+      "lineage_hash": "4de765e1eb41be00ffe3e5355fa05afe163836e4850c1640cece06673ac1871a",
+      "treatment_hash": "b9e0fc8a76ecf6a939524c961f9a723f1cba74f7db7e0b522f4e5365cfa4d80a",
+      "perceptual_rule_id": "5581061c1ad4462e02c6132505e42d7b59f8b8fd9f8fe1a562d3a30fe7f2b99e"
+    },
+    {
+      "slot_id": "fc40fedd982edc3b79e49e4306cd0799538e48aa8e7aa1582aef6db4270fdffb",
+      "kind": "evaluator_attack_mild",
+      "reference_job_id": "330a2fdbb9e1400e3f6821838e1e5991a76d37df36921381271155dd2402b071",
+      "candidate_job_id": "b917b13c81f3a42e1f4d0d512f9f84f89a2d7bdef5b1acc3c91ac9080098d739",
+      "lineage_hash": "076b399628f8e1176c4c25d1a7df0e640e4e8d240f5977e368075637b01448ee",
+      "treatment_hash": "18c1e90b22db070b1919e75061a6c404f59874abd2fca25d9e61e2160666ff87",
+      "perceptual_rule_id": "5581061c1ad4462e02c6132505e42d7b59f8b8fd9f8fe1a562d3a30fe7f2b99e"
+    },
+    {
+      "slot_id": "6db5d15d0707375dc0c2d37c539f971b397d55ae75c834c456b71a8a02f7d916",
+      "kind": "evaluator_attack_severe",
+      "reference_job_id": "99e7964b92d8b8c86f8cfb4291db8dee7ef90ef03ef2980f146c73d1af95f9d5",
+      "candidate_job_id": "832dda340133bfa9630f35e23150c9beb1e2668ab92ce5bb56b91c0a39f3292d",
+      "lineage_hash": "48fc777986f6c5058f67dad3300f5298089af46c3ef1893b06f1d0befd987829",
+      "treatment_hash": "24aad580e4c488541bb96165b6d30c1aed03fff42411832c4bd171786d1f45c8",
+      "perceptual_rule_id": "4795a5c4b313cbdd5692f03242c1f97ca21cdee13858a4d989421b83c756b118"
+    },
+    {
+      "slot_id": "5b3e9c5ff3a35048e80b1b201b5ebb2649c7c242bb09082e8afc0281095858de",
+      "kind": "evaluator_attack_severe",
+      "reference_job_id": "22139c6d6d954edd0efd9142fd962010a8c7fd0d40690009c4f145bd11d5c103",
+      "candidate_job_id": "5783fee9f716a7c61f6fbcc8fca044aa0ea61c21b057790a9e0d5e91c27f018d",
+      "lineage_hash": "9063728e8e1c42f7bd04da1e5090258c8c3b2eb55e2dd358e8c72cf58e760501",
+      "treatment_hash": "da942ddb2256d2fe286ac7fe526f32cb7e4126627dfb8b293914233bbe00a982",
+      "perceptual_rule_id": "4795a5c4b313cbdd5692f03242c1f97ca21cdee13858a4d989421b83c756b118"
+    },
+    {
+      "slot_id": "9f11d6652328ba630be34b6b5544fad2646dc2d1f69bc0fb726eb13ee9f2277e",
+      "kind": "evaluator_attack_severe",
+      "reference_job_id": "1243cde69dc7bfe7beedeb14ad5a411f5ab00415c32e5df56fa2e0602d91cac8",
+      "candidate_job_id": "6501fe9b8bdc89b2ae28facdfa8d37e3e0585c28069a375f56270f275d186049",
+      "lineage_hash": "c73096574cf47b3ea70b08d20abab43b21ccebffb4c5dd2fca384fc103c3e8e3",
+      "treatment_hash": "5678b18bd2e30b507a39c196ca275d885a65980ef2e0271b738c663ecd4b526a",
+      "perceptual_rule_id": "4795a5c4b313cbdd5692f03242c1f97ca21cdee13858a4d989421b83c756b118"
+    },
+    {
+      "slot_id": "3d7c2672b79bbf9fdc6fc2da850d9702c3bb889471673ae5adac65ae30e6bf93",
+      "kind": "evaluator_attack_severe",
+      "reference_job_id": "2fa21924bc188fd8ca74162375bea24338a0ea15d1f0023d1dee7899bc7a727e",
+      "candidate_job_id": "61d87124603e90558bb38747c5bd8324f788cfa52ad10a1d4a60f44b6b1007e8",
+      "lineage_hash": "d700fa7e46c9146182dc8f699d3e9bbc7dada05a6adb232559952825203af56d",
+      "treatment_hash": "ff94d411e8af2a44ddef0657d680a53de877e89042354c5836e2d8a3d1c9550c",
+      "perceptual_rule_id": "4795a5c4b313cbdd5692f03242c1f97ca21cdee13858a4d989421b83c756b118"
+    },
+    {
+      "slot_id": "721cbb30cc18f418abc309d1ed8a771e4cc9bf870ebf34506f96f6474c205a1a",
+      "kind": "evaluator_attack_severe",
+      "reference_job_id": "2709d6388546ee1900ab40c18fe0746b728114ba78adc35aab79ce178f1108dc",
+      "candidate_job_id": "c44827501975467ba5ee55ea8c3ae91ca55b07f6be132088c95b4b9b450c0e42",
+      "lineage_hash": "142841c1b834707c8e4240c49f79978155bfcf0311bc55eac5d260e009ad9097",
+      "treatment_hash": "b55028d5b7d11fd86740cb1caf6cd7b1126658fc863f7b53bba4989629dc3461",
+      "perceptual_rule_id": "4795a5c4b313cbdd5692f03242c1f97ca21cdee13858a4d989421b83c756b118"
+    },
+    {
+      "slot_id": "b165f151816053bffc819bb6da41ca913aeb46eb26f55164cc1711866e889892",
+      "kind": "evaluator_attack_severe",
+      "reference_job_id": "e4dad6a06476f0d21a0c31c36ffabc3338d80333f7cc4f9f2e766b7e30464b23",
+      "candidate_job_id": "a98ffbbb9bbfa519b5328c1850070308b20da8fc80afdc1eb5b0d7fda1b90e98",
+      "lineage_hash": "9137b6371670e5721a928d64cc24b955f1781f2097db42cfbc3f1589e0a2f957",
+      "treatment_hash": "f3d4df781b0b62ef929af937a71e8bebe724098cb695e0a8592fe778bcf06fa5",
+      "perceptual_rule_id": "4795a5c4b313cbdd5692f03242c1f97ca21cdee13858a4d989421b83c756b118"
+    },
+    {
+      "slot_id": "d6da0c806f63de3302e0fbbcb6b955a26b5cad3b98770f8ba4192c9b693aea79",
+      "kind": "evaluator_attack_severe",
+      "reference_job_id": "79ebe33b8e3a7a9aedc8ada642d4a70b7f220dc794d6edf79e2cae07123f3f2b",
+      "candidate_job_id": "f40cb77bc5be82a05f6a52c823dfdbac02d04a61adf0b997990207feae3d272d",
+      "lineage_hash": "4de765e1eb41be00ffe3e5355fa05afe163836e4850c1640cece06673ac1871a",
+      "treatment_hash": "d4ff1334eab090868112a0211124024fe7a7164b78618a4ef397e2956507c262",
+      "perceptual_rule_id": "4795a5c4b313cbdd5692f03242c1f97ca21cdee13858a4d989421b83c756b118"
+    },
+    {
+      "slot_id": "dc4eb6ca8494cafc6ff31d5ff0f3b51b68197c7ccee2c9e8a7a549bcfb018d35",
+      "kind": "evaluator_attack_severe",
+      "reference_job_id": "330a2fdbb9e1400e3f6821838e1e5991a76d37df36921381271155dd2402b071",
+      "candidate_job_id": "cfe59b1fd48d22bef1a2e04a29164c00bfeb34b6f5ea627e615aa0c425e9e590",
+      "lineage_hash": "076b399628f8e1176c4c25d1a7df0e640e4e8d240f5977e368075637b01448ee",
+      "treatment_hash": "8a351692813c75812af4b59928267e4fb079de64ccf7815b64ff59225a8dfb2e",
+      "perceptual_rule_id": "4795a5c4b313cbdd5692f03242c1f97ca21cdee13858a4d989421b83c756b118"
+    }
+  ],
+  "judging_permitted_only_after": "complete_observable_receipt",
+  "qualification": "prohibited",
+  "protocol_id": "2968ec0666cd4cd00bb5a9761f7c4e069cf5afaa48b0bc2832cf1f338a0f0142"
+}

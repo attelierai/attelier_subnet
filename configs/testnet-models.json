@@ -1,0 +1,9 @@
+{
+  "note": "Simulated model profiles for chain tests. Fingerprints are derived from these; no weights exist.",
+  "baseline": {"name": "public-baseline", "mean": 0.70},
+  "models": [
+    {"name": "good-lora", "mean": 0.80},
+    {"name": "weak-lora", "mean": 0.705},
+    {"name": "better-lora", "mean": 0.90}
+  ]
+}

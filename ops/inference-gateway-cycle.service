@@ -1,0 +1,20 @@
+[Unit]
+Description=Attelier testnet M1 trusted gateway cycle
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/attelier-inference/gateway-cycle.json
+
+[Service]
+Type=oneshot
+User=attelier-inference
+Group=attelier-inference
+UMask=0077
+WorkingDirectory=/opt/attelier-inference/current
+Environment=PYTHONPATH=/opt/attelier-inference/current/src
+ExecStart=/opt/attelier-inference/.venv/bin/python /opt/attelier-inference/current/scripts/inference_gateway_cycle.py --config /etc/attelier-inference/gateway-cycle.json
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/attelier-inference
+ReadOnlyPaths=/etc/attelier-inference /opt/attelier-inference

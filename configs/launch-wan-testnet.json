@@ -1,0 +1,14 @@
+{
+  "schema": "forge/launch-config/v1",
+  "network": "test",
+  "netuid": 578,
+  "genesis_hash": "8f9cf856bf558a14440e75569c9e58594757048d7b3a84b5d25f6bd978263105",
+  "contract_hash": "2739c3d25fc9d408dfd1cee78c7a134e8350e4515602d515dd148d7c542bfe84",
+  "campaign_id": "wan-testnet-20261020",
+  "admission_window_blocks": 300,
+  "entropy_offset_blocks": 10,
+  "max_active_candidates": 1,
+  "campaign_limit_usd": 50.0,
+  "closure_reserve_usd": 5.0,
+  "policy_schema": "forge/launch-policy/v2"
+}

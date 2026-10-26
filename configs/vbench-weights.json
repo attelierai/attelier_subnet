@@ -1,0 +1,33 @@
+{
+  "dino_model/dino_vitbase16_pretrain.pth": {
+    "url": "https://dl.fbaipublicfiles.com/dino/dino_vitbase16_pretrain/dino_vitbase16_pretrain.pth",
+    "sha256": "bf34ad0f424b9029b593e8dc3ed553bf26e88bcba0d32bf3e62a6209cb64c85e",
+    "bytes": 343242485
+  },
+  "clip_model/ViT-B-32.pt": {
+    "url": "https://openaipublic.azureedge.net/clip/models/40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af/ViT-B-32.pt",
+    "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+    "bytes": 353976522
+  },
+  "pyiqa_model/musiq_spaq_ckpt-358bb6af.pth": {
+    "url": "https://github.com/chaofengc/IQA-PyTorch/releases/download/v0.1-weights/musiq_spaq_ckpt-358bb6af.pth",
+    "sha256": "358bb6af275e28ea56821d44fb55c6cb83645db11f394d3ad65b2d149965ab50",
+    "bytes": 108610983
+  },
+  "amt_model/amt-s.pth": {
+    "url": "https://huggingface.co/lalala125/AMT/resolve/main/amt-s.pth",
+    "sha256": "07e7e03405c213fe4405678db9b42d05671e48c56faf6a441b99bb0047d3cf77",
+    "bytes": 12038359
+  },
+  "raft_model/models.zip": {
+    "url": "https://dl.dropboxusercontent.com/s/4j4z58wuv8o0mfz/models.zip",
+    "sha256": "4be6101b271f58ec49866da5cf609fd17e86e9cae2483f70630ef4a295dc66bd",
+    "bytes": 81977417
+  },
+  "raft_model/models/raft-things.pth": {
+    "sha256": "fcfa4125d6418f4de95d84aec20a3c5f4e205101715a79f193243c186ac9a7e1",
+    "bytes": 21108000,
+    "archive": "raft_model/models.zip",
+    "member": "models/raft-things.pth"
+  }
+}

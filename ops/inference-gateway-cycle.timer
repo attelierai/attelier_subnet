@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Attelier testnet M1 trusted gateway cycle every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=5min
+RandomizedDelaySec=15s
+Persistent=true
+Unit=inference-gateway-cycle.service
+
+[Install]
+WantedBy=timers.target

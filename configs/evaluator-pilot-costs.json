@@ -1,0 +1,29 @@
+{
+  "cap_usd": 5.0,
+  "warmup_generations": 2,
+  "wan50_seconds": 182.0553461228119,
+  "gpu_usd_hour": 1.01,
+  "luna_usd_call": 0.006,
+  "startup_seconds": 900,
+  "metrics_seconds": 1800,
+  "encoding_seconds": 300,
+  "api_and_transfer_idle_seconds": 300,
+  "shutdown_seconds": 480,
+  "storage_usd": 0.04,
+  "transfer_usd": 0.31,
+  "contingency_usd": 0.5,
+  "basis": {
+    "wan50_seconds": "Historical measured RTX5090 Wan50 mean; not a maximum.",
+    "gpu_usd_hour": "Proposed combined GPU+running-disk ceiling1.01USD/hour. RunPod catalog RTX5090 0.99USD/hour; exact offer/disks still require validation before rental.",
+    "luna_usd_call": "Planning allowance 0.006USD/call versus historical observed0.00462634375; not a provider quote or enforced per-call cap. Pilot durable reservation0.30USD covers published maximum-context standard pricing incl cache writes and regional headroom; API partition1.20USD may stop early.",
+    "operations": "Proposed allowances, not measured bounds: startup15min metrics30min encoding5min transfer-buffer5min backup5min closure3min. Luna is dispatched only after verified backup and GPU closure by evaluator_pilot_judge.py, so its latency is outside GPU rent.",
+    "storage_transfer_contingency": "S3 eu-west-1: <=1GiB, three full readbacks, one month Standard storage, request allowance0.01USD: ~0.325USD within0.35USD ancillary. RunPod transfer free; contingency0.50USD. Prices checked2026-10-05; no actual invoice.",
+    "metrics": "Historical five metric batch receipts total434.1145705439849seconds for32videos; batch timing does not qualify per-video isolated execution. Pilot allowance1800seconds is unverified."
+  },
+  "unresolved": [
+    "Verify exact provider offer, disk/transfer prices and runtime image digest before rental.",
+    "Validate operational allowances and real supervisor/archive/launcher integration against all-in 5USD cap; local guard cannot enforce provider-side billing.",
+    "Complete score-free media observability reviews under the frozen protocol after generation; no score-driven exclusions.",
+    "Obtain explicit authorization for the concrete pilot; this plan initiates no spend."
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "base_reference": {
+    "backend": "hf",
+    "repo_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+    "revision": "0fad780a534b6463e45facd96134c9f345acfa5b"
+  },
+  "files": [
+    {
+      "bytes": 465,
+      "path": "transformer/config.json",
+      "sha256": "0b093fa072e9ff28763febe9b964ee582f566733a6d6709deb9dfba1bde16b81"
+    },
+    {
+      "bytes": 4998781576,
+      "path": "transformer/diffusion_pytorch_model-00001-of-00002.safetensors",
+      "sha256": "6d011927dbd2cc8afe53d57abab04a8fd86f615d83324770d985fb058ece3a24"
+    },
+    {
+      "bytes": 677289072,
+      "path": "transformer/diffusion_pytorch_model-00002-of-00002.safetensors",
+      "sha256": "b92ec2309b1f239af6f746431815a881afcc938abb26a4f08d9a2fd6c892f872"
+    },
+    {
+      "bytes": 73296,
+      "path": "transformer/diffusion_pytorch_model.safetensors.index.json",
+      "sha256": "dcbcf3497134a3f50557ff069dd7d2c84b5c4d8c5932472f6bdb780fb4016589"
+    }
+  ],
+  "generation_config": {
+    "guidance_scale": 5.0,
+    "scheduler": "original_unipc",
+    "steps": 44
+  },
+  "license": "apache-2.0",
+  "reference": {
+    "backend": "hf",
+    "repo_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+    "revision": "0fad780a534b6463e45facd96134c9f345acfa5b"
+  },
+  "role": "full_transformer"
+}

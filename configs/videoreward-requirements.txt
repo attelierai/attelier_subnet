@@ -1,0 +1,20 @@
+# Dedicated remote .venv-video-reward; candidate runtime, GPU smoke test pending.
+# Do not install into the Wan generator's environment or the local development venv.
+# torch 2.3.1 targets the A40/4090 pilot, not Blackwell / RTX 5090.
+torch==2.3.1
+torchvision==0.18.1
+transformers==4.45.2
+peft==0.10.0
+trl==0.8.6
+rich==13.7.1
+accelerate==0.34.2
+datasets==2.19.1
+pyarrow==16.1.0
+numpy==1.26.4
+scipy==1.14.1
+pandas==2.2.2
+Pillow==10.2.0
+safetensors==0.4.5
+decord==0.6.0
+imageio==2.37.2
+imageio-ffmpeg==0.6.0

@@ -1,0 +1,27 @@
+.venv/
+.venv-video-reward/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+*.egg-info/
+build/
+dist/
+runs/
+.data/
+*.sqlite
+*.log
+.codex/
+# Local historical handoff; public acceptance evidence lives in docs/.
+/state.md
+# weights, media and secrets never versioned
+*.safetensors
+*.pt
+*.mp4
+.env
+.env.*
+!.env.example
+
+# Local agent instructions are never published.
+AGENTS.md
