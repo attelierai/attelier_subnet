@@ -1,0 +1,1963 @@
+{
+  "schema": "forge/runtime-burn-controlled-fork/v1",
+  "local_only": true,
+  "upstream_writes": false,
+  "signed_extrinsics": 0,
+  "signature_mock": false,
+  "unresolved_imports": "trap if called",
+  "origin_block": "0x75da69788584f9fe9b65cbe772e57ae4419bceda339896785c07ab7f587bfbc7",
+  "cases": [
+    {
+      "name": "burn-owner-uid0",
+      "mode": "Burn",
+      "ownerUid": 0,
+      "targetUid": 0,
+      "seed": {
+        "SubtensorModule": {
+          "$removePrefix": [
+            "NetworksAdded",
+            "Weights",
+            "Bonds"
+          ],
+          "NetworksAdded": [
+            [
+              [
+                578
+              ],
+              true
+            ]
+          ],
+          "RecycleOrBurn": [
+            [
+              [
+                578
+              ],
+              "Burn"
+            ]
+          ],
+          "FirstEmissionBlockNumber": [
+            [
+              [
+                578
+              ],
+              null
+            ]
+          ],
+          "PendingServerEmission": [
+            [
+              [
+                578
+              ],
+              1000000000
+            ]
+          ],
+          "PendingValidatorEmission": [
+            [
+              [
+                578
+              ],
+              0
+            ]
+          ],
+          "PendingRootAlphaDivs": [
+            [
+              [
+                578
+              ],
+              0
+            ]
+          ],
+          "PendingOwnerCut": [
+            [
+              [
+                578
+              ],
+              0
+            ]
+          ],
+          "PendingEpochAt": [
+            [
+              [
+                578
+              ],
+              8287681
+            ]
+          ],
+          "SubnetOwnerHotkey": [
+            [
+              [
+                578
+              ],
+              "REDACTED_ACCOUNT_2"
+            ]
+          ],
+          "OwnedHotkeys": [
+            [
+              [
+                "REDACTED_ACCOUNT_1"
+              ],
+              []
+            ]
+          ],
+          "Weights": [
+            [
+              [
+                578,
+                0
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                1
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                2
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                3
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                4
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                5
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                6
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                7
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                8
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                9
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                0
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                1
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                2
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                3
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                4
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                5
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                6
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                7
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                8
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                9
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ]
+          ],
+          "LastUpdate": [
+            [
+              [
+                578
+              ],
+              [
+                8287680,
+                8287680,
+                8287680,
+                8287680,
+                8287680,
+                8287680,
+                8287680,
+                8287680,
+                8287680,
+                8287680
+              ]
+            ],
+            [
+              [
+                4674
+              ],
+              [
+                8287680,
+                8287680,
+                8287680,
+                8287680,
+                8287680,
+                8287680,
+                8287680,
+                8287680,
+                8287680,
+                8287680
+              ]
+            ]
+          ]
+        }
+      },
+      "before": {
+        "minerBurned": {
+          "bits": 4294967296
+        },
+        "subnetAlphaOut": 218714019305290,
+        "pendingServerEmission": 1000000000,
+        "pendingValidatorEmission": 0,
+        "pendingRootAlphaDivs": 0,
+        "pendingOwnerCut": 0,
+        "lastEpochBlock": 8287463,
+        "firstEmissionBlockNumber": null,
+        "subnetOwnerHotkey": "REDACTED_ACCOUNT_2",
+        "emission": [
+          110699448957,
+          0,
+          0,
+          1168735,
+          0,
+          0,
+          0,
+          18450384477,
+          18449821407,
+          0
+        ],
+        "incentive": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "totalAlphaIssuance": 218711999943951,
+        "alphaBurned": 7011039123824,
+        "alphaRecycled": 56049,
+        "stake": {
+          "0": 92061085654571,
+          "1": 0,
+          "2": 0,
+          "3": 3747873375,
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 0,
+          "9": 0
+        }
+      },
+      "block": "0x80d203a637fb16b65ebd88327897d6588d890998a42afac9b239353ef0a75fd6",
+      "after": {
+        "minerBurned": {
+          "bits": 4294967296
+        },
+        "subnetAlphaOut": 218714019305290,
+        "pendingServerEmission": 0,
+        "pendingValidatorEmission": 0,
+        "pendingRootAlphaDivs": 0,
+        "pendingOwnerCut": 0,
+        "lastEpochBlock": 8287681,
+        "firstEmissionBlockNumber": null,
+        "subnetOwnerHotkey": "REDACTED_ACCOUNT_2",
+        "emission": [
+          499996042,
+          0,
+          0,
+          3956,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "incentive": [
+          65535,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "totalAlphaIssuance": 218711999943951,
+        "alphaBurned": 7012039123824,
+        "alphaRecycled": 56049,
+        "stake": {
+          "0": 92061085654571,
+          "1": 0,
+          "2": 0,
+          "3": 3747873375,
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 0,
+          "9": 0
+        }
+      },
+      "deltas": {
+        "burned": 1000000000,
+        "recycled": 0,
+        "alpha_out": 0,
+        "target_stake": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "name": "recycle-owner-uid0",
+      "mode": "Recycle",
+      "ownerUid": 0,
+      "targetUid": 0,
+      "seed": {
+        "SubtensorModule": {
+          "$removePrefix": [
+            "NetworksAdded",
+            "Weights",
+            "Bonds"
+          ],
+          "NetworksAdded": [
+            [
+              [
+                578
+              ],
+              true
+            ]
+          ],
+          "RecycleOrBurn": [
+            [
+              [
+                578
+              ],
+              "Recycle"
+            ]
+          ],
+          "FirstEmissionBlockNumber": [
+            [
+              [
+                578
+              ],
+              null
+            ]
+          ],
+          "PendingServerEmission": [
+            [
+              [
+                578
+              ],
+              1000000000
+            ]
+          ],
+          "PendingValidatorEmission": [
+            [
+              [
+                578
+              ],
+              0
+            ]
+          ],
+          "PendingRootAlphaDivs": [
+            [
+              [
+                578
+              ],
+              0
+            ]
+          ],
+          "PendingOwnerCut": [
+            [
+              [
+                578
+              ],
+              0
+            ]
+          ],
+          "PendingEpochAt": [
+            [
+              [
+                578
+              ],
+              8287682
+            ]
+          ],
+          "SubnetOwnerHotkey": [
+            [
+              [
+                578
+              ],
+              "REDACTED_ACCOUNT_2"
+            ]
+          ],
+          "OwnedHotkeys": [
+            [
+              [
+                "REDACTED_ACCOUNT_1"
+              ],
+              []
+            ]
+          ],
+          "Weights": [
+            [
+              [
+                578,
+                0
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                1
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                2
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                3
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                4
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                5
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                6
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                7
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                8
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                9
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                0
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                1
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                2
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                3
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                4
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                5
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                6
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                7
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                8
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                9
+              ],
+              [
+                [
+                  0,
+                  65535
+                ]
+              ]
+            ]
+          ],
+          "LastUpdate": [
+            [
+              [
+                578
+              ],
+              [
+                8287681,
+                8287681,
+                8287681,
+                8287681,
+                8287681,
+                8287681,
+                8287681,
+                8287681,
+                8287681,
+                8287681
+              ]
+            ],
+            [
+              [
+                4674
+              ],
+              [
+                8287681,
+                8287681,
+                8287681,
+                8287681,
+                8287681,
+                8287681,
+                8287681,
+                8287681,
+                8287681,
+                8287681
+              ]
+            ]
+          ]
+        }
+      },
+      "before": {
+        "minerBurned": {
+          "bits": 4294967296
+        },
+        "subnetAlphaOut": 218714019305290,
+        "pendingServerEmission": 1000000000,
+        "pendingValidatorEmission": 0,
+        "pendingRootAlphaDivs": 0,
+        "pendingOwnerCut": 0,
+        "lastEpochBlock": 8287681,
+        "firstEmissionBlockNumber": null,
+        "subnetOwnerHotkey": "REDACTED_ACCOUNT_2",
+        "emission": [
+          499996042,
+          0,
+          0,
+          3956,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "incentive": [
+          65535,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "totalAlphaIssuance": 218711999943951,
+        "alphaBurned": 7012039123824,
+        "alphaRecycled": 56049,
+        "stake": {
+          "0": 92061085654571,
+          "1": 0,
+          "2": 0,
+          "3": 3747873375,
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 0,
+          "9": 0
+        }
+      },
+      "block": "0xb02c1410d3fc63f6e75d0a95850d65f84a8f0ca16c098907684599fcbc2d9845",
+      "after": {
+        "minerBurned": {
+          "bits": 4294967296
+        },
+        "subnetAlphaOut": 218713019305290,
+        "pendingServerEmission": 0,
+        "pendingValidatorEmission": 0,
+        "pendingRootAlphaDivs": 0,
+        "pendingOwnerCut": 0,
+        "lastEpochBlock": 8287682,
+        "firstEmissionBlockNumber": null,
+        "subnetOwnerHotkey": "REDACTED_ACCOUNT_2",
+        "emission": [
+          499996042,
+          0,
+          0,
+          3956,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "incentive": [
+          65535,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "totalAlphaIssuance": 218710999943951,
+        "alphaBurned": 7012039123824,
+        "alphaRecycled": 1000056049,
+        "stake": {
+          "0": 92061085654571,
+          "1": 0,
+          "2": 0,
+          "3": 3747873375,
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 0,
+          "9": 0
+        }
+      },
+      "deltas": {
+        "burned": 0,
+        "recycled": 1000000000,
+        "alpha_out": -1000000000,
+        "target_stake": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "name": "burn-owner-uid7",
+      "mode": "Burn",
+      "ownerUid": 7,
+      "targetUid": 7,
+      "seed": {
+        "SubtensorModule": {
+          "$removePrefix": [
+            "NetworksAdded",
+            "Weights",
+            "Bonds"
+          ],
+          "NetworksAdded": [
+            [
+              [
+                578
+              ],
+              true
+            ]
+          ],
+          "RecycleOrBurn": [
+            [
+              [
+                578
+              ],
+              "Burn"
+            ]
+          ],
+          "FirstEmissionBlockNumber": [
+            [
+              [
+                578
+              ],
+              null
+            ]
+          ],
+          "PendingServerEmission": [
+            [
+              [
+                578
+              ],
+              1000000000
+            ]
+          ],
+          "PendingValidatorEmission": [
+            [
+              [
+                578
+              ],
+              0
+            ]
+          ],
+          "PendingRootAlphaDivs": [
+            [
+              [
+                578
+              ],
+              0
+            ]
+          ],
+          "PendingOwnerCut": [
+            [
+              [
+                578
+              ],
+              0
+            ]
+          ],
+          "PendingEpochAt": [
+            [
+              [
+                578
+              ],
+              8287683
+            ]
+          ],
+          "SubnetOwnerHotkey": [
+            [
+              [
+                578
+              ],
+              "REDACTED_ACCOUNT_3"
+            ]
+          ],
+          "OwnedHotkeys": [
+            [
+              [
+                "REDACTED_ACCOUNT_1"
+              ],
+              []
+            ]
+          ],
+          "Weights": [
+            [
+              [
+                578,
+                0
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                1
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                2
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                3
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                4
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                5
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                6
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                7
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                8
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                9
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                0
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                1
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                2
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                3
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                4
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                5
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                6
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                7
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                8
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                9
+              ],
+              [
+                [
+                  7,
+                  65535
+                ]
+              ]
+            ]
+          ],
+          "LastUpdate": [
+            [
+              [
+                578
+              ],
+              [
+                8287682,
+                8287682,
+                8287682,
+                8287682,
+                8287682,
+                8287682,
+                8287682,
+                8287682,
+                8287682,
+                8287682
+              ]
+            ],
+            [
+              [
+                4674
+              ],
+              [
+                8287682,
+                8287682,
+                8287682,
+                8287682,
+                8287682,
+                8287682,
+                8287682,
+                8287682,
+                8287682,
+                8287682
+              ]
+            ]
+          ]
+        }
+      },
+      "before": {
+        "minerBurned": {
+          "bits": 4294967296
+        },
+        "subnetAlphaOut": 218713019305290,
+        "pendingServerEmission": 1000000000,
+        "pendingValidatorEmission": 0,
+        "pendingRootAlphaDivs": 0,
+        "pendingOwnerCut": 0,
+        "lastEpochBlock": 8287682,
+        "firstEmissionBlockNumber": null,
+        "subnetOwnerHotkey": "REDACTED_ACCOUNT_3",
+        "emission": [
+          499996042,
+          0,
+          0,
+          3956,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "incentive": [
+          65535,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "totalAlphaIssuance": 218710999943951,
+        "alphaBurned": 7012039123824,
+        "alphaRecycled": 1000056049,
+        "stake": {
+          "0": 92061085654571,
+          "1": 0,
+          "2": 0,
+          "3": 3747873375,
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 0,
+          "9": 0
+        }
+      },
+      "block": "0xde292e214f5fe18d6587f264a53fcadf14626970e9c3bc848a9d215e43303bf6",
+      "after": {
+        "minerBurned": {
+          "bits": 4294967296
+        },
+        "subnetAlphaOut": 218713019305290,
+        "pendingServerEmission": 0,
+        "pendingValidatorEmission": 0,
+        "pendingRootAlphaDivs": 0,
+        "pendingOwnerCut": 0,
+        "lastEpochBlock": 8287683,
+        "firstEmissionBlockNumber": null,
+        "subnetOwnerHotkey": "REDACTED_ACCOUNT_3",
+        "emission": [
+          249996042,
+          0,
+          0,
+          3956,
+          0,
+          0,
+          0,
+          250000000,
+          0,
+          0
+        ],
+        "incentive": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          65535,
+          0,
+          0
+        ],
+        "totalAlphaIssuance": 218710999943951,
+        "alphaBurned": 7013039123824,
+        "alphaRecycled": 1000056049,
+        "stake": {
+          "0": 92061085654571,
+          "1": 0,
+          "2": 0,
+          "3": 3747873375,
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 0,
+          "9": 0
+        }
+      },
+      "deltas": {
+        "burned": 1000000000,
+        "recycled": 0,
+        "alpha_out": 0,
+        "target_stake": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "name": "pay-nonowner-uid8",
+      "mode": "Burn",
+      "ownerUid": 7,
+      "targetUid": 8,
+      "seed": {
+        "SubtensorModule": {
+          "$removePrefix": [
+            "NetworksAdded",
+            "Weights",
+            "Bonds"
+          ],
+          "NetworksAdded": [
+            [
+              [
+                578
+              ],
+              true
+            ]
+          ],
+          "RecycleOrBurn": [
+            [
+              [
+                578
+              ],
+              "Burn"
+            ]
+          ],
+          "FirstEmissionBlockNumber": [
+            [
+              [
+                578
+              ],
+              null
+            ]
+          ],
+          "PendingServerEmission": [
+            [
+              [
+                578
+              ],
+              1000000000
+            ]
+          ],
+          "PendingValidatorEmission": [
+            [
+              [
+                578
+              ],
+              0
+            ]
+          ],
+          "PendingRootAlphaDivs": [
+            [
+              [
+                578
+              ],
+              0
+            ]
+          ],
+          "PendingOwnerCut": [
+            [
+              [
+                578
+              ],
+              0
+            ]
+          ],
+          "PendingEpochAt": [
+            [
+              [
+                578
+              ],
+              8287684
+            ]
+          ],
+          "SubnetOwnerHotkey": [
+            [
+              [
+                578
+              ],
+              "REDACTED_ACCOUNT_3"
+            ]
+          ],
+          "OwnedHotkeys": [
+            [
+              [
+                "REDACTED_ACCOUNT_1"
+              ],
+              []
+            ]
+          ],
+          "Weights": [
+            [
+              [
+                578,
+                0
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                1
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                2
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                3
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                4
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                5
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                6
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                7
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                8
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                578,
+                9
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                0
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                1
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                2
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                3
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                4
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                5
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                6
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                7
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                8
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ],
+            [
+              [
+                4674,
+                9
+              ],
+              [
+                [
+                  8,
+                  65535
+                ]
+              ]
+            ]
+          ],
+          "LastUpdate": [
+            [
+              [
+                578
+              ],
+              [
+                8287683,
+                8287683,
+                8287683,
+                8287683,
+                8287683,
+                8287683,
+                8287683,
+                8287683,
+                8287683,
+                8287683
+              ]
+            ],
+            [
+              [
+                4674
+              ],
+              [
+                8287683,
+                8287683,
+                8287683,
+                8287683,
+                8287683,
+                8287683,
+                8287683,
+                8287683,
+                8287683,
+                8287683
+              ]
+            ]
+          ]
+        }
+      },
+      "before": {
+        "minerBurned": {
+          "bits": 4294967296
+        },
+        "subnetAlphaOut": 218713019305290,
+        "pendingServerEmission": 1000000000,
+        "pendingValidatorEmission": 0,
+        "pendingRootAlphaDivs": 0,
+        "pendingOwnerCut": 0,
+        "lastEpochBlock": 8287683,
+        "firstEmissionBlockNumber": null,
+        "subnetOwnerHotkey": "REDACTED_ACCOUNT_3",
+        "emission": [
+          249996042,
+          0,
+          0,
+          3956,
+          0,
+          0,
+          0,
+          250000000,
+          0,
+          0
+        ],
+        "incentive": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          65535,
+          0,
+          0
+        ],
+        "totalAlphaIssuance": 218710999943951,
+        "alphaBurned": 7013039123824,
+        "alphaRecycled": 1000056049,
+        "stake": {
+          "0": 92061085654571,
+          "1": 0,
+          "2": 0,
+          "3": 3747873375,
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 0,
+          "9": 0
+        }
+      },
+      "block": "0x5774f863d96735204606cf5aeaabede5ec1464a732c3f7855a6238265fe17503",
+      "after": {
+        "minerBurned": {
+          "bits": 0
+        },
+        "subnetAlphaOut": 218713019305290,
+        "pendingServerEmission": 0,
+        "pendingValidatorEmission": 0,
+        "pendingRootAlphaDivs": 0,
+        "pendingOwnerCut": 0,
+        "lastEpochBlock": 8287684,
+        "firstEmissionBlockNumber": null,
+        "subnetOwnerHotkey": "REDACTED_ACCOUNT_3",
+        "emission": [
+          249996042,
+          0,
+          0,
+          3956,
+          0,
+          0,
+          0,
+          0,
+          250000000,
+          0
+        ],
+        "incentive": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          65535,
+          0
+        ],
+        "totalAlphaIssuance": 218710999943951,
+        "alphaBurned": 7013039123824,
+        "alphaRecycled": 1000056049,
+        "stake": {
+          "0": 92061085654571,
+          "1": 0,
+          "2": 0,
+          "3": 3747873375,
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 1000000000,
+          "9": 0
+        }
+      },
+      "deltas": {
+        "burned": 0,
+        "recycled": 0,
+        "alpha_out": 0,
+        "target_stake": 1000000000
+      },
+      "status": "PASS"
+    }
+  ],
+  "runtime_sha256": "8ba7928018328ba9e08d6089b0d92c841967801733ff4cd3c4965f105881e681",
+  "runtime": 484,
+  "runtime_wasm_bytes": 2677869,
+  "neurons": 10,
+  "mechanisms": 2,
+  "status": "PASS",
+  "redaction": {
+    "kind": "public-redacted-copy",
+    "original_receipt_sha256": "159d33fd3c166ee09931f4e910a24eb27c7dd0477afc6addf7d38dd82b498458",
+    "removed": "SS58 accounts replaced consistently by opaque labels; numeric results, runtime identity and block hashes unchanged",
+    "account_count": 3
+  }
+}

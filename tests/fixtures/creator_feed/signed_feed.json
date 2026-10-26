@@ -1,0 +1,22 @@
+{
+  "document": {
+    "issuer": "5EsNLFaGe9XK5LzWH3i6eC2Wqv6YqZS1442N1C4yeSdP6uxy",
+    "payload": "{\"version\":1,\"kind\":\"attelier.creator-usage\",\"from\":1791273600000,\"to\":1791360000000,\"generatedAt\":1791360000000,\"entries\":[{\"hotkey\":\"5FLnZ3XJazE2aUXXs2jy4kqxXGVRJjomGDRXBWQnM15ZjT3H\",\"coldkey\":\"5C5Z3GAFrMKr12CafiRRGgRobMPSacYAjABv7ZcVrNd46Ks1\",\"credits\":300,\"runs\":1,\"people\":1},{\"hotkey\":\"5FZZXVT7EJ3PRvZzSKTR4NRsa3ayZyV3VezaRwAkZt38xYed\",\"coldkey\":\"5C5pikEXSf3jZc5CfPfYy3ZUf7NarxVTeZ6GYsvFHonbxUUR\",\"credits\":100,\"runs\":1,\"people\":1},{\"hotkey\":\"5FvbP6ju3TCfaaq3pEmv4VBJeGLdyi1Q4b7JzZqMAvdRoZEx\",\"coldkey\":\"5HTFuDZSnX6gt4KYwLv3jATbN6M1DLebYF4UL58EV2wibBE9\",\"credits\":50,\"runs\":1,\"people\":1},{\"hotkey\":\"5GeTmH2r95SohHPMFMtT16HqzoVpmMyw6NnTZTYpTfRcUN4g\",\"coldkey\":\"5DtDLm5rQHShDqojQpsvcN8tRXHVFaecfDoRet1SU6BFD9Fi\",\"credits\":25,\"runs\":1,\"people\":1}]}",
+    "signature": "0x3cdc7f571cd9a5fc24f1431b0abdf78902c8fe3417b56211c88e8dc0e93d9c7e8eeda5be83425690759b6d20297d1646edd12e8d9e1712138abb8ef669c0ac81"
+  },
+  "window": {
+    "from": 1791273600000,
+    "to": 1791360000000
+  },
+  "addresses": {
+    "7": "5EsNLFaGe9XK5LzWH3i6eC2Wqv6YqZS1442N1C4yeSdP6uxy",
+    "11": "5C5Z3GAFrMKr12CafiRRGgRobMPSacYAjABv7ZcVrNd46Ks1",
+    "12": "5FLnZ3XJazE2aUXXs2jy4kqxXGVRJjomGDRXBWQnM15ZjT3H",
+    "13": "5C5pikEXSf3jZc5CfPfYy3ZUf7NarxVTeZ6GYsvFHonbxUUR",
+    "14": "5FZZXVT7EJ3PRvZzSKTR4NRsa3ayZyV3VezaRwAkZt38xYed",
+    "15": "5HTFuDZSnX6gt4KYwLv3jATbN6M1DLebYF4UL58EV2wibBE9",
+    "16": "5FvbP6ju3TCfaaq3pEmv4VBJeGLdyi1Q4b7JzZqMAvdRoZEx",
+    "17": "5DtDLm5rQHShDqojQpsvcN8tRXHVFaecfDoRet1SU6BFD9Fi",
+    "18": "5GeTmH2r95SohHPMFMtT16HqzoVpmMyw6NnTZTYpTfRcUN4g"
+  }
+}

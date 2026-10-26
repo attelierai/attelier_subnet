@@ -1,0 +1,69 @@
+{
+  "schema": "forge/videoreward-study-spec/v1",
+  "qualification": "prohibited",
+  "code": {
+    "url": "https://github.com/KlingAIResearch/VideoAlign",
+    "revision": "219ab9db64c045e5181a2202d11f686439351292",
+    "files": {
+      "inference.py": "c8af4107b176eca0a44c76455dd936f8de223fdcecbb5a0ba75d528570a6d07f",
+      "utils.py": "7575cfad48e784d457dfe2d63d1153478a0b84041c669f21e329a4bc59e57b19",
+      "data.py": "6e359324135e73976b35e0f365b6ec77c8a9f199c4342c265f98a7c666011764",
+      "train_reward.py": "7cb695e1c92b66e4c9a897515b822d236a7a5ec88a7cffaab4093e14668d8111",
+      "trainer.py": "da06ddc7e08f740a8cc4a1641a7294e4e46b0f3f457ffcb0b98bdfb7cfd06e02",
+      "prompt_template.py": "8fb42f91fd7440a1c9a377e78f36d67da6132eb348f402eecbeb57e41f138ae9",
+      "vision_process.py": "2789d30e92a4d54ae32db555325d586ad8375f0f7fb64a31f60fb040a939cce6",
+      "LICENSE": "6169d4ae8a09a5cfcb470f46b44a1e669fe41126875de948d16e3c4cd6830c09"
+    }
+  },
+  "reward": {
+    "repo": "KlingTeam/VideoReward",
+    "revision": "4f26600130683e6f1de9f5d463887f28e8ef995c",
+    "files": {
+      "checkpoint-11352/model.pth": "48375908e6112de9f0248402db156a23b480709a6960b091c598c6f4c88d21b9",
+      "model_config.json": "f1f220ed972cfc6f88990fff93a1b847a61c2c9424a2bfa7f38148c34edb5174"
+    }
+  },
+  "base": {
+    "repo": "Qwen/Qwen2-VL-2B-Instruct",
+    "revision": "895c3a49bc3fa70a340399125c650a463535e71c",
+    "files": {
+      "chat_template.json": "ad60d90252ed0b0705ba14e2d0ad0fec0beac1ea955642b54059b36052d8bc96",
+      "config.json": "422adefa19e62dd175961cec85bc0400344fe5bf9b22bd1182e05aaae78556e0",
+      "generation_config.json": "d2864bf1edea5863d331edfff48106b586a366f5a2c41aa77731fadc53aa25d2",
+      "merges.txt": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3",
+      "model-00001-of-00002.safetensors": "994ac2b03f97de8bc647d0fe5eba2e4b632b3e28dc03574c29bdfc36cf47e1b9",
+      "model-00002-of-00002.safetensors": "92540d8353c8d226a589a3b179bdb33851c970ee2cc2ac7ba035f79425e7b833",
+      "model.safetensors.index.json": "260ab9fa1418d6d6ab79daa1d9da2c47264f3b72edb4630fc799077ac67d27c6",
+      "preprocessor_config.json": "b5eaad0c2815f07631535dcc58f3c462b0d73693638ad21d19f3c50820eae1cc",
+      "tokenizer.json": "cb63a0a23eef3d5b01063a9880a1925a65aaf4d1591d519910ee3527852950a0",
+      "tokenizer_config.json": "ff5c4fd898fe8c39591eb70e5d39d2782802d4204d6ae9ba1223252f354842a0",
+      "vocab.json": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+    }
+  },
+  "inference": {
+    "fps": 2.0,
+    "max_pixels": 200704,
+    "use_norm": true,
+    "dtype": "bfloat16",
+    "attention": "sdpa",
+    "batch_size": 1,
+    "seed": 0
+  },
+  "runtime_versions": {
+    "torch": "2.3.1",
+    "torchvision": "0.18.1",
+    "transformers": "4.45.2",
+    "peft": "0.10.0",
+    "trl": "0.8.6",
+    "rich": "13.7.1",
+    "accelerate": "0.34.2",
+    "datasets": "2.19.1",
+    "numpy": "1.26.4",
+    "pandas": "2.2.2",
+    "Pillow": "10.2.0",
+    "safetensors": "0.4.5",
+    "decord": "0.6.0",
+    "imageio": "2.37.2",
+    "imageio-ffmpeg": "0.6.0"
+  }
+}

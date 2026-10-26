@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "forge-subnet-core"
+version = "0.1.0"
+description = "Deterministic protocol and pre-consensus core for a Bittensor model competition"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "numpy>=2.0,<3",
+  "scipy>=1.13,<2",
+]
+
+[project.optional-dependencies]
+vision = [
+  "Pillow==11.3.0",
+  "imageio==2.37.2",
+  "imageio-ffmpeg==0.6.0",
+  "python-dotenv==1.1.1",
+]
+hippius = ["hippius-hub==0.6.0"]
+gpu = [
+  "torch==2.11.0",
+  "diffusers==0.36.0",
+  "transformers==4.57.3",
+  "accelerate==1.12.0",
+  "peft==0.18.0",
+  "safetensors==0.7.0",
+  "sentencepiece==0.2.1",
+  "ftfy==6.3.1",
+  "imageio==2.37.2",
+  "imageio-ffmpeg==0.6.0",
+]
+chain = [
+  "bittensor==11.0.1",
+]
+dev = [
+  "pytest>=8,<9",
+  "ruff>=0.8,<1",
+]
+
+[project.scripts]
+forge = "forge.cli:main"
+forge-inference = "forge.inference.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"forge.chain" = ["runtime_reviews/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

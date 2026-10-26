@@ -1,0 +1,1064 @@
+{
+  "_fixture": "Synthetic genesis fixture on the pilot round shape; measurements are not real. Wallets use standard development identities.",
+  "schema": "forge/dashboard/v2",
+  "updated_at": "2026-10-04T16:30:00Z",
+  "network": {
+    "name": "test",
+    "netuid": 578
+  },
+  "base_model": {
+    "name": "Wan2.1 T2V 1.3B",
+    "repo": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+    "revision": "0fad780a534b6463e45facd96134c9f345acfa5b",
+    "url": "https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B-Diffusers/tree/0fad780a534b6463e45facd96134c9f345acfa5b",
+    "steps": 50
+  },
+  "contract": {
+    "min_speedup": 1.1,
+    "quality_margin": 0.02,
+    "axes": [
+      "prompt_adherence",
+      "action_adherence",
+      "camera_adherence",
+      "dynamic_degree",
+      "subject_consistency",
+      "background_consistency",
+      "image_quality",
+      "temporal_smoothness"
+    ],
+    "consensus_rule": "stake_majority_v2",
+    "reference_steps": 50
+  },
+  "king": null,
+  "crowns": [],
+  "validators": [
+    {
+      "uid": 0,
+      "hotkey": "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+      "stake": 104289.154491905,
+      "active": true
+    },
+    {
+      "uid": 3,
+      "hotkey": "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy",
+      "stake": 1.918128626,
+      "active": true
+    }
+  ],
+  "rounds": [
+    {
+      "round_id": "test-578-b8148666-e8148668",
+      "stage": "final",
+      "diagnostic": true,
+      "close_block": 8148666,
+      "entropy_block": 8148668,
+      "commit_close_block": 8148700,
+      "committee": [
+        {
+          "hotkey": "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+          "stake": 104289.154491905
+        },
+        {
+          "hotkey": "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy",
+          "stake": 1.918128626
+        }
+      ],
+      "challengers": [
+        "uid4-equal",
+        "uid6-fast",
+        "uid5-poor"
+      ]
+    }
+  ],
+  "challengers": [
+    {
+      "id": "uid4-equal",
+      "round_id": "test-578-b8148666-e8148668",
+      "label": "Wan2.1 \u00b7 50 steps (control)",
+      "hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+      "uid": 4,
+      "model": {
+        "repo": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+        "revision": "0fad780a534b6463e45facd96134c9f345acfa5b",
+        "url": "https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B-Diffusers/tree/0fad780a534b6463e45facd96134c9f345acfa5b",
+        "steps": 50,
+        "guidance": 5
+      },
+      "manifest_hash": "2e97c6d60c25c9a4712964c209342f868c8416e225fc3f40c92f58e69e90a05a",
+      "commit_block": 8148595,
+      "status": "diagnostic"
+    },
+    {
+      "id": "uid6-fast",
+      "round_id": "test-578-b8148666-e8148668",
+      "label": "Wan2.1 \u00b7 40 steps",
+      "hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+      "uid": 6,
+      "model": {
+        "repo": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+        "revision": "0fad780a534b6463e45facd96134c9f345acfa5b",
+        "url": "https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B-Diffusers/tree/0fad780a534b6463e45facd96134c9f345acfa5b",
+        "steps": 40,
+        "guidance": 5
+      },
+      "manifest_hash": "56db68e623936f5eac1e9475c252e27c42c5a7fe05ab460700ed5b269abfe7e7",
+      "commit_block": 8148602,
+      "status": "diagnostic"
+    },
+    {
+      "id": "uid5-poor",
+      "round_id": "test-578-b8148666-e8148668",
+      "label": "Wan2.1 \u00b7 1 step (control)",
+      "hotkey": "5HGjWAeFDfFCWPsjFQdVV2Msvz2XtMktvgocEZcCj68kUMaw",
+      "uid": 5,
+      "model": {
+        "repo": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+        "revision": "0fad780a534b6463e45facd96134c9f345acfa5b",
+        "url": "https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B-Diffusers/tree/0fad780a534b6463e45facd96134c9f345acfa5b",
+        "steps": 1,
+        "guidance": 1
+      },
+      "manifest_hash": "74a0ffdccc7f4100e90a66ca2bd547fc5deb4e7c6b4a8930c3c211206dfc469e",
+      "commit_block": 8148600,
+      "status": "diagnostic"
+    }
+  ],
+  "evaluations": [
+    {
+      "challenger_id": "uid4-equal",
+      "plan_hash": "db9adf37c49d813f214411289abd64619dafecc68a6fd6ca963f840abe7ab02a",
+      "verdict": {
+        "status": "DIAGNOSTIC",
+        "reasons": [
+          "Diagnostic round: no calibration, no rewards"
+        ],
+        "speed_ratio": 1.01,
+        "speed_range": [
+          1,
+          1.02
+        ],
+        "quality_vs_king": null,
+        "quality_vs_wan50": 0
+      },
+      "consensus": {
+        "rule": "stake_majority_v2",
+        "favorable_stake": 0,
+        "total_stake": 104291.072620531,
+        "reports": [
+          {
+            "validator": "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+            "prompts": [
+              "diagnostic-animal-static-stylized-0",
+              "diagnostic-object-static-natural-0",
+              "diagnostic-scenery-static-natural-0",
+              "diagnostic-scenery-moving-stylized-0"
+            ],
+            "audits": [
+              "diagnostic-object-static-natural-0",
+              "diagnostic-scenery-static-natural-0"
+            ],
+            "report_sha256": "016aed2b373786dcc65bce60fd34f2b77c6162193b5cc5d540ac859bf9dc9f3a",
+            "anchor_block": 8148690,
+            "status": "valid"
+          },
+          {
+            "validator": "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy",
+            "prompts": [
+              "diagnostic-human-static-natural-0",
+              "diagnostic-object-static-natural-0",
+              "diagnostic-object-moving-stylized-0",
+              "diagnostic-scenery-static-natural-0"
+            ],
+            "audits": [
+              "diagnostic-object-static-natural-0",
+              "diagnostic-scenery-static-natural-0"
+            ],
+            "report_sha256": "fd329f97e572a5e596a0e002ea9679465f63126ffc1811a2597d4211fac88110",
+            "anchor_block": 8148693,
+            "status": "valid"
+          }
+        ]
+      },
+      "prompts": [
+        {
+          "id": "diagnostic-human-static-natural-0",
+          "text": "Photorealistic footage of a gardener watering flowers, in cool evening light. The camera remains fixed.",
+          "category": {
+            "subject": "human",
+            "camera": "static",
+            "style": "natural"
+          },
+          "validators": [
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": false,
+          "speed_ratio": 1,
+          "quality_vs_king": null,
+          "quality_vs_wan50": -0.01,
+          "axes": {
+            "prompt_adherence": -0.04,
+            "action_adherence": -0.01,
+            "camera_adherence": 0.02,
+            "dynamic_degree": -0.04,
+            "subject_consistency": -0.01,
+            "background_consistency": 0.02,
+            "image_quality": -0.04,
+            "temporal_smoothness": -0.01
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "1bb0daf462e8f11956e00b17512611527862aa9e85d72cc5d739d7adf450fb2b",
+              "src": "/media/1bb0daf462e8f11956e00b17512611527862aa9e85d72cc5d739d7adf450fb2b.mp4",
+              "poster": "/media/d934e87071b3954dfa28961bd83a56b8cf15158025b860f6035f1d917d021750.jpg",
+              "seconds": 262,
+              "gpu": "RTX 6000 Ada \u00b7 B"
+            },
+            "challenger": {
+              "sha256": "c6350d61d80c33f90cbe02b28538361e9266fed5a98dc29408329ed84be1ca9d",
+              "src": "/media/c6350d61d80c33f90cbe02b28538361e9266fed5a98dc29408329ed84be1ca9d.mp4",
+              "poster": "/media/e063982671389775756e0da82d50fe2e84909b6b128f4cf83e70a707aae56766.jpg",
+              "seconds": 262,
+              "gpu": "RTX 6000 Ada \u00b7 B"
+            }
+          }
+        },
+        {
+          "id": "diagnostic-animal-static-stylized-0",
+          "text": "Watercolor animation of a cat stretching beside a window, in soft morning light. The camera remains fixed.",
+          "category": {
+            "subject": "animal",
+            "camera": "static",
+            "style": "stylized"
+          },
+          "validators": [
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y"
+          ],
+          "audit": false,
+          "speed_ratio": 1.01,
+          "quality_vs_king": null,
+          "quality_vs_wan50": 0.01,
+          "axes": {
+            "prompt_adherence": -0.02,
+            "action_adherence": 0.01,
+            "camera_adherence": 0.04,
+            "dynamic_degree": -0.02,
+            "subject_consistency": 0.01,
+            "background_consistency": 0.04,
+            "image_quality": -0.02,
+            "temporal_smoothness": 0.01
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "989149d81892568de237d1fd3ba721684daf61bb5297d1d5cfbac97ded91ecfa",
+              "src": "/media/989149d81892568de237d1fd3ba721684daf61bb5297d1d5cfbac97ded91ecfa.mp4",
+              "poster": "/media/1b9e545f9e60da7db9a205b132613549e50136c523e4a2cb08b44346a192f253.jpg",
+              "seconds": 268.5,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            },
+            "challenger": {
+              "sha256": "1fc3e6cf0dbaa9ffc730f7caefef0accdaeda0fdece51fe20481358f8a771dac",
+              "src": "/media/1fc3e6cf0dbaa9ffc730f7caefef0accdaeda0fdece51fe20481358f8a771dac.mp4",
+              "poster": "/media/2495d2985e74b9b53bf27d15de0e63ae624983a5039374823fb9e7321073b23c.jpg",
+              "seconds": 265.84,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            }
+          }
+        },
+        {
+          "id": "diagnostic-object-static-natural-0",
+          "text": "Photorealistic footage of a paper boat floating in a stream, in overcast daylight. The camera remains fixed.",
+          "category": {
+            "subject": "object",
+            "camera": "static",
+            "style": "natural"
+          },
+          "validators": [
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": true,
+          "speed_ratio": 1.02,
+          "quality_vs_king": null,
+          "quality_vs_wan50": -0.01,
+          "axes": {
+            "prompt_adherence": -0.04,
+            "action_adherence": -0.01,
+            "camera_adherence": 0.02,
+            "dynamic_degree": -0.04,
+            "subject_consistency": -0.01,
+            "background_consistency": 0.02,
+            "image_quality": -0.04,
+            "temporal_smoothness": -0.01
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "814f5f6650da1f39d5fb8f29c47aec98f1d1d1d66d0537d7bc2cddc15e86b0c6",
+              "src": "/media/814f5f6650da1f39d5fb8f29c47aec98f1d1d1d66d0537d7bc2cddc15e86b0c6.mp4",
+              "poster": "/media/e0623cf14bf38d22040fe26d7651bd2a15bfcf2df08e557c9cbd38aea839ad07.jpg",
+              "seconds": 275,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            },
+            "challenger": {
+              "sha256": "fe1be019017fb88502acf216cf690001a5ad39b50f1ba0b7b4ba10b41473cc7c",
+              "src": "/media/fe1be019017fb88502acf216cf690001a5ad39b50f1ba0b7b4ba10b41473cc7c.mp4",
+              "poster": "/media/ae17b3daf02949850fd5d22b4245721e3650729094b7d617c78efaa4e238d365.jpg",
+              "seconds": 269.61,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            }
+          }
+        },
+        {
+          "id": "diagnostic-object-moving-stylized-0",
+          "text": "Watercolor animation of a ceramic vase standing motionless on a shelf, in warm afternoon light. The camera slowly moves sideways.",
+          "category": {
+            "subject": "object",
+            "camera": "moving",
+            "style": "stylized"
+          },
+          "validators": [
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": false,
+          "speed_ratio": 1,
+          "quality_vs_king": null,
+          "quality_vs_wan50": 0.01,
+          "axes": {
+            "prompt_adherence": -0.02,
+            "action_adherence": 0.01,
+            "camera_adherence": 0.04,
+            "dynamic_degree": -0.02,
+            "subject_consistency": 0.01,
+            "background_consistency": 0.04,
+            "image_quality": -0.02,
+            "temporal_smoothness": 0.01
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "7863331604b7f653fcad075899654a30d6ab4fb8a75b770538d1faf68b733179",
+              "src": "/media/7863331604b7f653fcad075899654a30d6ab4fb8a75b770538d1faf68b733179.mp4",
+              "poster": "/media/ee02a963ff329a1a7ff053d17c68b9f9564cefaa3cee9a2bb34a5959cdee20f6.jpg",
+              "seconds": 281.5,
+              "gpu": "RTX 6000 Ada \u00b7 B"
+            },
+            "challenger": {
+              "sha256": "ad889c41592eb1b5417a933e1ea5c81f034fb74458a662c8959a08bb7f92854a",
+              "src": "/media/ad889c41592eb1b5417a933e1ea5c81f034fb74458a662c8959a08bb7f92854a.mp4",
+              "poster": "/media/af83728d7ad274bfced71059d5930128772d2c6586c8adfd682914cb42afb3da.jpg",
+              "seconds": 281.5,
+              "gpu": "RTX 6000 Ada \u00b7 B"
+            }
+          }
+        },
+        {
+          "id": "diagnostic-scenery-static-natural-0",
+          "text": "Photorealistic footage of gentle waves washing onto sand, in warm afternoon light. The camera remains fixed.",
+          "category": {
+            "subject": "scenery",
+            "camera": "static",
+            "style": "natural"
+          },
+          "validators": [
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": true,
+          "speed_ratio": 1.01,
+          "quality_vs_king": null,
+          "quality_vs_wan50": -0.01,
+          "axes": {
+            "prompt_adherence": -0.04,
+            "action_adherence": -0.01,
+            "camera_adherence": 0.02,
+            "dynamic_degree": -0.04,
+            "subject_consistency": -0.01,
+            "background_consistency": 0.02,
+            "image_quality": -0.04,
+            "temporal_smoothness": -0.01
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "4c24b4fe4509803c26d60228a2ad3154af42d1d293abe23936e1c72485bbd010",
+              "src": "/media/4c24b4fe4509803c26d60228a2ad3154af42d1d293abe23936e1c72485bbd010.mp4",
+              "poster": "/media/474db0e25f31bc18e42e0b612f8ccd226162f5c6c07d055561671097551555de.jpg",
+              "seconds": 288,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            },
+            "challenger": {
+              "sha256": "acfa89124004fff037af413ddc062ac52e4450d415810e652ac832a4f2e264d6",
+              "src": "/media/acfa89124004fff037af413ddc062ac52e4450d415810e652ac832a4f2e264d6.mp4",
+              "poster": "/media/aa264060d9e6a04b948295c5cb57226bc614b34cb1236bded8679916fdd93fa6.jpg",
+              "seconds": 285.15,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            }
+          }
+        },
+        {
+          "id": "diagnostic-scenery-moving-stylized-0",
+          "text": "Watercolor animation of a waterfall cascading over rocks, in warm afternoon light. The camera slowly moves sideways.",
+          "category": {
+            "subject": "scenery",
+            "camera": "moving",
+            "style": "stylized"
+          },
+          "validators": [
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y"
+          ],
+          "audit": false,
+          "speed_ratio": 1.02,
+          "quality_vs_king": null,
+          "quality_vs_wan50": 0.01,
+          "axes": {
+            "prompt_adherence": -0.02,
+            "action_adherence": 0.01,
+            "camera_adherence": 0.04,
+            "dynamic_degree": -0.02,
+            "subject_consistency": 0.01,
+            "background_consistency": 0.04,
+            "image_quality": -0.02,
+            "temporal_smoothness": 0.01
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "ffb50105e1f31c4b988626bc88a6526bafc2678a0003abb937a9e0193931a391",
+              "src": "/media/ffb50105e1f31c4b988626bc88a6526bafc2678a0003abb937a9e0193931a391.mp4",
+              "poster": "/media/a22f6a16199051d577164b262be352df88e88b6e1441972e210661380f5568e3.jpg",
+              "seconds": 294.5,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            },
+            "challenger": {
+              "sha256": "ad3a014af0066ecfa5baa873a6e3a93353ad227e7634307a1ef81de551914c46",
+              "src": "/media/ad3a014af0066ecfa5baa873a6e3a93353ad227e7634307a1ef81de551914c46.mp4",
+              "poster": "/media/0a9d1d6d5251e05e58f3961066dea9bb23915f6f857ca53b243b940a51e5ee1a.jpg",
+              "seconds": 288.73,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "challenger_id": "uid6-fast",
+      "plan_hash": "4e776c14dcccf3aa7076ffbf2e81cccece0d21a5f661f61ebe078c2cf5425266",
+      "verdict": {
+        "status": "DIAGNOSTIC",
+        "reasons": [
+          "Diagnostic round: no calibration, no rewards"
+        ],
+        "speed_ratio": 1.25,
+        "speed_range": [
+          1.24,
+          1.26
+        ],
+        "quality_vs_king": null,
+        "quality_vs_wan50": -0.05
+      },
+      "consensus": {
+        "rule": "stake_majority_v2",
+        "favorable_stake": 0,
+        "total_stake": 104291.072620531,
+        "reports": [
+          {
+            "validator": "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+            "prompts": [
+              "diagnostic-animal-static-stylized-0",
+              "diagnostic-object-static-natural-0",
+              "diagnostic-scenery-static-natural-0",
+              "diagnostic-scenery-moving-stylized-0"
+            ],
+            "audits": [
+              "diagnostic-object-static-natural-0",
+              "diagnostic-scenery-static-natural-0"
+            ],
+            "report_sha256": "c112923d8f4a2394eaa1bb91ef0cb3ee5fabddf185bdd73721535a4507cec009",
+            "anchor_block": 8148690,
+            "status": "valid"
+          },
+          {
+            "validator": "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy",
+            "prompts": [
+              "diagnostic-human-static-natural-0",
+              "diagnostic-object-static-natural-0",
+              "diagnostic-object-moving-stylized-0",
+              "diagnostic-scenery-static-natural-0"
+            ],
+            "audits": [
+              "diagnostic-object-static-natural-0",
+              "diagnostic-scenery-static-natural-0"
+            ],
+            "report_sha256": "babb0723559783ab3b45a015c55064b23273d3c1361c3a90dbb3d6862fbdd3fc",
+            "anchor_block": 8148693,
+            "status": "valid"
+          }
+        ]
+      },
+      "prompts": [
+        {
+          "id": "diagnostic-human-static-natural-0",
+          "text": "Photorealistic footage of a gardener watering flowers, in cool evening light. The camera remains fixed.",
+          "category": {
+            "subject": "human",
+            "camera": "static",
+            "style": "natural"
+          },
+          "validators": [
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": false,
+          "speed_ratio": 1.24,
+          "quality_vs_king": null,
+          "quality_vs_wan50": -0.06,
+          "axes": {
+            "prompt_adherence": -0.09,
+            "action_adherence": -0.06,
+            "camera_adherence": -0.03,
+            "dynamic_degree": -0.09,
+            "subject_consistency": -0.06,
+            "background_consistency": -0.03,
+            "image_quality": -0.09,
+            "temporal_smoothness": -0.06
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "1bb0daf462e8f11956e00b17512611527862aa9e85d72cc5d739d7adf450fb2b",
+              "src": "/media/1bb0daf462e8f11956e00b17512611527862aa9e85d72cc5d739d7adf450fb2b.mp4",
+              "poster": "/media/d934e87071b3954dfa28961bd83a56b8cf15158025b860f6035f1d917d021750.jpg",
+              "seconds": 262,
+              "gpu": "RTX 6000 Ada \u00b7 B"
+            },
+            "challenger": {
+              "sha256": "4b9ac514d6a9c0718acf352f50b006d83059793ef983d4f18f7aea5289cdfb36",
+              "src": "/media/4b9ac514d6a9c0718acf352f50b006d83059793ef983d4f18f7aea5289cdfb36.mp4",
+              "poster": "/media/9e26be27f73380f0869f55032053ed46893a10917fa31bec6a0048c76050a032.jpg",
+              "seconds": 211.29,
+              "gpu": "RTX 6000 Ada \u00b7 B"
+            }
+          }
+        },
+        {
+          "id": "diagnostic-animal-static-stylized-0",
+          "text": "Watercolor animation of a cat stretching beside a window, in soft morning light. The camera remains fixed.",
+          "category": {
+            "subject": "animal",
+            "camera": "static",
+            "style": "stylized"
+          },
+          "validators": [
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y"
+          ],
+          "audit": false,
+          "speed_ratio": 1.25,
+          "quality_vs_king": null,
+          "quality_vs_wan50": -0.04,
+          "axes": {
+            "prompt_adherence": -0.07,
+            "action_adherence": -0.04,
+            "camera_adherence": -0.01,
+            "dynamic_degree": -0.07,
+            "subject_consistency": -0.04,
+            "background_consistency": -0.01,
+            "image_quality": -0.07,
+            "temporal_smoothness": -0.04
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "989149d81892568de237d1fd3ba721684daf61bb5297d1d5cfbac97ded91ecfa",
+              "src": "/media/989149d81892568de237d1fd3ba721684daf61bb5297d1d5cfbac97ded91ecfa.mp4",
+              "poster": "/media/1b9e545f9e60da7db9a205b132613549e50136c523e4a2cb08b44346a192f253.jpg",
+              "seconds": 268.5,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            },
+            "challenger": {
+              "sha256": "4c0c97ec4429efe972e157c1968620b3388570ff0e95fd0f14bb059228f3b7c4",
+              "src": "/media/4c0c97ec4429efe972e157c1968620b3388570ff0e95fd0f14bb059228f3b7c4.mp4",
+              "poster": "/media/859963ded09c39248e600111bb8ef69b053bda3fe9822cc6530cdfbc415904d6.jpg",
+              "seconds": 214.8,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            }
+          }
+        },
+        {
+          "id": "diagnostic-object-static-natural-0",
+          "text": "Photorealistic footage of a paper boat floating in a stream, in overcast daylight. The camera remains fixed.",
+          "category": {
+            "subject": "object",
+            "camera": "static",
+            "style": "natural"
+          },
+          "validators": [
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": true,
+          "speed_ratio": 1.26,
+          "quality_vs_king": null,
+          "quality_vs_wan50": -0.06,
+          "axes": {
+            "prompt_adherence": -0.09,
+            "action_adherence": -0.06,
+            "camera_adherence": -0.03,
+            "dynamic_degree": -0.09,
+            "subject_consistency": -0.06,
+            "background_consistency": -0.03,
+            "image_quality": -0.09,
+            "temporal_smoothness": -0.06
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "814f5f6650da1f39d5fb8f29c47aec98f1d1d1d66d0537d7bc2cddc15e86b0c6",
+              "src": "/media/814f5f6650da1f39d5fb8f29c47aec98f1d1d1d66d0537d7bc2cddc15e86b0c6.mp4",
+              "poster": "/media/e0623cf14bf38d22040fe26d7651bd2a15bfcf2df08e557c9cbd38aea839ad07.jpg",
+              "seconds": 275,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            },
+            "challenger": {
+              "sha256": "6c5cd40561c26ef13fee39c8b5f997aa1e1de145b299d971b40df7e112239798",
+              "src": "/media/6c5cd40561c26ef13fee39c8b5f997aa1e1de145b299d971b40df7e112239798.mp4",
+              "poster": "/media/69180550a986a1ccb802b6632c9939df32b2a5a7c3dc40c552058c3f8391e535.jpg",
+              "seconds": 218.25,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            }
+          }
+        },
+        {
+          "id": "diagnostic-object-moving-stylized-0",
+          "text": "Watercolor animation of a ceramic vase standing motionless on a shelf, in warm afternoon light. The camera slowly moves sideways.",
+          "category": {
+            "subject": "object",
+            "camera": "moving",
+            "style": "stylized"
+          },
+          "validators": [
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": false,
+          "speed_ratio": 1.24,
+          "quality_vs_king": null,
+          "quality_vs_wan50": -0.04,
+          "axes": {
+            "prompt_adherence": -0.07,
+            "action_adherence": -0.04,
+            "camera_adherence": -0.01,
+            "dynamic_degree": -0.07,
+            "subject_consistency": -0.04,
+            "background_consistency": -0.01,
+            "image_quality": -0.07,
+            "temporal_smoothness": -0.04
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "7863331604b7f653fcad075899654a30d6ab4fb8a75b770538d1faf68b733179",
+              "src": "/media/7863331604b7f653fcad075899654a30d6ab4fb8a75b770538d1faf68b733179.mp4",
+              "poster": "/media/ee02a963ff329a1a7ff053d17c68b9f9564cefaa3cee9a2bb34a5959cdee20f6.jpg",
+              "seconds": 281.5,
+              "gpu": "RTX 6000 Ada \u00b7 B"
+            },
+            "challenger": {
+              "sha256": "32381bb031508a833fa66814667ab2ff2bfc2271af79532680bea11daa902ba6",
+              "src": "/media/32381bb031508a833fa66814667ab2ff2bfc2271af79532680bea11daa902ba6.mp4",
+              "poster": "/media/c398b9b7d48f8233207d24129d5c8b9986e65f4a4406b6579827f0d423d03b4b.jpg",
+              "seconds": 227.02,
+              "gpu": "RTX 6000 Ada \u00b7 B"
+            }
+          }
+        },
+        {
+          "id": "diagnostic-scenery-static-natural-0",
+          "text": "Photorealistic footage of gentle waves washing onto sand, in warm afternoon light. The camera remains fixed.",
+          "category": {
+            "subject": "scenery",
+            "camera": "static",
+            "style": "natural"
+          },
+          "validators": [
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": true,
+          "speed_ratio": 1.25,
+          "quality_vs_king": null,
+          "quality_vs_wan50": -0.06,
+          "axes": {
+            "prompt_adherence": -0.09,
+            "action_adherence": -0.06,
+            "camera_adherence": -0.03,
+            "dynamic_degree": -0.09,
+            "subject_consistency": -0.06,
+            "background_consistency": -0.03,
+            "image_quality": -0.09,
+            "temporal_smoothness": -0.06
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "4c24b4fe4509803c26d60228a2ad3154af42d1d293abe23936e1c72485bbd010",
+              "src": "/media/4c24b4fe4509803c26d60228a2ad3154af42d1d293abe23936e1c72485bbd010.mp4",
+              "poster": "/media/474db0e25f31bc18e42e0b612f8ccd226162f5c6c07d055561671097551555de.jpg",
+              "seconds": 288,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            },
+            "challenger": {
+              "sha256": "539f32dd4e02e2c84c03f7dae6ba88570bf1a04f60b161dd66d461548e4988c0",
+              "src": "/media/539f32dd4e02e2c84c03f7dae6ba88570bf1a04f60b161dd66d461548e4988c0.mp4",
+              "poster": "/media/b6f8d5fe47a67e9151d4dc75d9dc30c034511bb552fabbb8be5a9ca4e8a29d4e.jpg",
+              "seconds": 230.4,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            }
+          }
+        },
+        {
+          "id": "diagnostic-scenery-moving-stylized-0",
+          "text": "Watercolor animation of a waterfall cascading over rocks, in warm afternoon light. The camera slowly moves sideways.",
+          "category": {
+            "subject": "scenery",
+            "camera": "moving",
+            "style": "stylized"
+          },
+          "validators": [
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y"
+          ],
+          "audit": false,
+          "speed_ratio": 1.26,
+          "quality_vs_king": null,
+          "quality_vs_wan50": -0.04,
+          "axes": {
+            "prompt_adherence": -0.07,
+            "action_adherence": -0.04,
+            "camera_adherence": -0.01,
+            "dynamic_degree": -0.07,
+            "subject_consistency": -0.04,
+            "background_consistency": -0.01,
+            "image_quality": -0.07,
+            "temporal_smoothness": -0.04
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "ffb50105e1f31c4b988626bc88a6526bafc2678a0003abb937a9e0193931a391",
+              "src": "/media/ffb50105e1f31c4b988626bc88a6526bafc2678a0003abb937a9e0193931a391.mp4",
+              "poster": "/media/a22f6a16199051d577164b262be352df88e88b6e1441972e210661380f5568e3.jpg",
+              "seconds": 294.5,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            },
+            "challenger": {
+              "sha256": "e448a7cfea5b93f9777283868556d5720b55116cb8a28c939d30f3a46fcd0277",
+              "src": "/media/e448a7cfea5b93f9777283868556d5720b55116cb8a28c939d30f3a46fcd0277.mp4",
+              "poster": "/media/9a479f2aee891f81067e881d07de32625e43dfb11eff14dc7bdf58b8cf638158.jpg",
+              "seconds": 233.73,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "challenger_id": "uid5-poor",
+      "plan_hash": "7e029c2d4badbedcdf1217e70f0fd5e3bcd002dbe2c43ff315127df32c2b026d",
+      "verdict": {
+        "status": "DIAGNOSTIC",
+        "reasons": [
+          "Diagnostic round: no calibration, no rewards"
+        ],
+        "speed_ratio": 31.01,
+        "speed_range": [
+          31,
+          31.02
+        ],
+        "quality_vs_king": null,
+        "quality_vs_wan50": -0.62
+      },
+      "consensus": {
+        "rule": "stake_majority_v2",
+        "favorable_stake": 0,
+        "total_stake": 104291.072620531,
+        "reports": [
+          {
+            "validator": "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+            "prompts": [
+              "diagnostic-animal-static-stylized-0",
+              "diagnostic-object-static-natural-0",
+              "diagnostic-scenery-static-natural-0",
+              "diagnostic-scenery-moving-stylized-0"
+            ],
+            "audits": [
+              "diagnostic-object-static-natural-0",
+              "diagnostic-scenery-static-natural-0"
+            ],
+            "report_sha256": "5261042b091fdd864c4c2875e0ff6f3c001ec4224d74c51edc04d063d8a3b2b1",
+            "anchor_block": 8148690,
+            "status": "valid"
+          },
+          {
+            "validator": "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy",
+            "prompts": [
+              "diagnostic-human-static-natural-0",
+              "diagnostic-object-static-natural-0",
+              "diagnostic-object-moving-stylized-0",
+              "diagnostic-scenery-static-natural-0"
+            ],
+            "audits": [
+              "diagnostic-object-static-natural-0",
+              "diagnostic-scenery-static-natural-0"
+            ],
+            "report_sha256": "e8c1bcfc798844a49826302bd6ac56ab5466d32d2f11448a0256d4c56b6fba19",
+            "anchor_block": 8148693,
+            "status": "valid"
+          }
+        ]
+      },
+      "prompts": [
+        {
+          "id": "diagnostic-human-static-natural-0",
+          "text": "Photorealistic footage of a gardener watering flowers, in cool evening light. The camera remains fixed.",
+          "category": {
+            "subject": "human",
+            "camera": "static",
+            "style": "natural"
+          },
+          "validators": [
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": false,
+          "speed_ratio": 31,
+          "quality_vs_king": null,
+          "quality_vs_wan50": -0.63,
+          "axes": {
+            "prompt_adherence": -0.66,
+            "action_adherence": -0.63,
+            "camera_adherence": -0.6,
+            "dynamic_degree": -0.66,
+            "subject_consistency": -0.63,
+            "background_consistency": -0.6,
+            "image_quality": -0.66,
+            "temporal_smoothness": -0.63
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "1bb0daf462e8f11956e00b17512611527862aa9e85d72cc5d739d7adf450fb2b",
+              "src": "/media/1bb0daf462e8f11956e00b17512611527862aa9e85d72cc5d739d7adf450fb2b.mp4",
+              "poster": "/media/d934e87071b3954dfa28961bd83a56b8cf15158025b860f6035f1d917d021750.jpg",
+              "seconds": 262,
+              "gpu": "RTX 6000 Ada \u00b7 B"
+            },
+            "challenger": {
+              "sha256": "cf3bdec60a3aea37d4d2c6236c49bed734f0008b1b3f1d8e315c29b75ee14442",
+              "src": "/media/cf3bdec60a3aea37d4d2c6236c49bed734f0008b1b3f1d8e315c29b75ee14442.mp4",
+              "poster": "/media/fc4e3ddc3683c0bec76d5d1b0dbb7ee6f3af52b242737a147da4e2c698ff3fa0.jpg",
+              "seconds": 8.45,
+              "gpu": "RTX 6000 Ada \u00b7 B"
+            }
+          }
+        },
+        {
+          "id": "diagnostic-animal-static-stylized-0",
+          "text": "Watercolor animation of a cat stretching beside a window, in soft morning light. The camera remains fixed.",
+          "category": {
+            "subject": "animal",
+            "camera": "static",
+            "style": "stylized"
+          },
+          "validators": [
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y"
+          ],
+          "audit": false,
+          "speed_ratio": 31.01,
+          "quality_vs_king": null,
+          "quality_vs_wan50": -0.61,
+          "axes": {
+            "prompt_adherence": -0.64,
+            "action_adherence": -0.61,
+            "camera_adherence": -0.58,
+            "dynamic_degree": -0.64,
+            "subject_consistency": -0.61,
+            "background_consistency": -0.58,
+            "image_quality": -0.64,
+            "temporal_smoothness": -0.61
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "989149d81892568de237d1fd3ba721684daf61bb5297d1d5cfbac97ded91ecfa",
+              "src": "/media/989149d81892568de237d1fd3ba721684daf61bb5297d1d5cfbac97ded91ecfa.mp4",
+              "poster": "/media/1b9e545f9e60da7db9a205b132613549e50136c523e4a2cb08b44346a192f253.jpg",
+              "seconds": 268.5,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            },
+            "challenger": {
+              "sha256": "5ecd0bb7dbe1e3deedfd12b104fb8216d8e1cbaeaa211ccdc70bc7be4a0cd17f",
+              "src": "/media/5ecd0bb7dbe1e3deedfd12b104fb8216d8e1cbaeaa211ccdc70bc7be4a0cd17f.mp4",
+              "poster": "/media/3d0283784d0370bfaadc5a709312277a75796a105585f1ae2b9b512e9bac2906.jpg",
+              "seconds": 8.66,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            }
+          }
+        },
+        {
+          "id": "diagnostic-object-static-natural-0",
+          "text": "Photorealistic footage of a paper boat floating in a stream, in overcast daylight. The camera remains fixed.",
+          "category": {
+            "subject": "object",
+            "camera": "static",
+            "style": "natural"
+          },
+          "validators": [
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": true,
+          "speed_ratio": 31.02,
+          "quality_vs_king": null,
+          "quality_vs_wan50": -0.63,
+          "axes": {
+            "prompt_adherence": -0.66,
+            "action_adherence": -0.63,
+            "camera_adherence": -0.6,
+            "dynamic_degree": -0.66,
+            "subject_consistency": -0.63,
+            "background_consistency": -0.6,
+            "image_quality": -0.66,
+            "temporal_smoothness": -0.63
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "814f5f6650da1f39d5fb8f29c47aec98f1d1d1d66d0537d7bc2cddc15e86b0c6",
+              "src": "/media/814f5f6650da1f39d5fb8f29c47aec98f1d1d1d66d0537d7bc2cddc15e86b0c6.mp4",
+              "poster": "/media/e0623cf14bf38d22040fe26d7651bd2a15bfcf2df08e557c9cbd38aea839ad07.jpg",
+              "seconds": 275,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            },
+            "challenger": {
+              "sha256": "5ab1be1f7035b10ad8b6eb5f684069a2be50e9a3a3eee3841fe08f017ee89a88",
+              "src": "/media/5ab1be1f7035b10ad8b6eb5f684069a2be50e9a3a3eee3841fe08f017ee89a88.mp4",
+              "poster": "/media/458adea0c2cf837f1bb7ead9ac22a64aa6e5cf6ad2ae7c4bce636954266cf496.jpg",
+              "seconds": 8.87,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            }
+          }
+        },
+        {
+          "id": "diagnostic-object-moving-stylized-0",
+          "text": "Watercolor animation of a ceramic vase standing motionless on a shelf, in warm afternoon light. The camera slowly moves sideways.",
+          "category": {
+            "subject": "object",
+            "camera": "moving",
+            "style": "stylized"
+          },
+          "validators": [
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": false,
+          "speed_ratio": 31,
+          "quality_vs_king": null,
+          "quality_vs_wan50": -0.61,
+          "axes": {
+            "prompt_adherence": -0.64,
+            "action_adherence": -0.61,
+            "camera_adherence": -0.58,
+            "dynamic_degree": -0.64,
+            "subject_consistency": -0.61,
+            "background_consistency": -0.58,
+            "image_quality": -0.64,
+            "temporal_smoothness": -0.61
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "7863331604b7f653fcad075899654a30d6ab4fb8a75b770538d1faf68b733179",
+              "src": "/media/7863331604b7f653fcad075899654a30d6ab4fb8a75b770538d1faf68b733179.mp4",
+              "poster": "/media/ee02a963ff329a1a7ff053d17c68b9f9564cefaa3cee9a2bb34a5959cdee20f6.jpg",
+              "seconds": 281.5,
+              "gpu": "RTX 6000 Ada \u00b7 B"
+            },
+            "challenger": {
+              "sha256": "5793d36b7463784b93ff00eebc8400730f11857e5beceb5f1306bd6c83ad4b23",
+              "src": "/media/5793d36b7463784b93ff00eebc8400730f11857e5beceb5f1306bd6c83ad4b23.mp4",
+              "poster": "/media/7b065c531adcbc28947142f5ea03938014f7d6693ad28442e642e0756d9caed5.jpg",
+              "seconds": 9.08,
+              "gpu": "RTX 6000 Ada \u00b7 B"
+            }
+          }
+        },
+        {
+          "id": "diagnostic-scenery-static-natural-0",
+          "text": "Photorealistic footage of gentle waves washing onto sand, in warm afternoon light. The camera remains fixed.",
+          "category": {
+            "subject": "scenery",
+            "camera": "static",
+            "style": "natural"
+          },
+          "validators": [
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": true,
+          "speed_ratio": 31.01,
+          "quality_vs_king": null,
+          "quality_vs_wan50": -0.63,
+          "axes": {
+            "prompt_adherence": -0.66,
+            "action_adherence": -0.63,
+            "camera_adherence": -0.6,
+            "dynamic_degree": -0.66,
+            "subject_consistency": -0.63,
+            "background_consistency": -0.6,
+            "image_quality": -0.66,
+            "temporal_smoothness": -0.63
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "4c24b4fe4509803c26d60228a2ad3154af42d1d293abe23936e1c72485bbd010",
+              "src": "/media/4c24b4fe4509803c26d60228a2ad3154af42d1d293abe23936e1c72485bbd010.mp4",
+              "poster": "/media/474db0e25f31bc18e42e0b612f8ccd226162f5c6c07d055561671097551555de.jpg",
+              "seconds": 288,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            },
+            "challenger": {
+              "sha256": "892706390985e0fb0cbbe1376dd75fc5ab1bcb7fb8cd7bd08a576522085e80c9",
+              "src": "/media/892706390985e0fb0cbbe1376dd75fc5ab1bcb7fb8cd7bd08a576522085e80c9.mp4",
+              "poster": "/media/10e6c2f65a928cbc96b62c04cf74f10619e1bc535705a56f278cb5c53774c9bd.jpg",
+              "seconds": 9.29,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            }
+          }
+        },
+        {
+          "id": "diagnostic-scenery-moving-stylized-0",
+          "text": "Watercolor animation of a waterfall cascading over rocks, in warm afternoon light. The camera slowly moves sideways.",
+          "category": {
+            "subject": "scenery",
+            "camera": "moving",
+            "style": "stylized"
+          },
+          "validators": [
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y"
+          ],
+          "audit": false,
+          "speed_ratio": 31.02,
+          "quality_vs_king": null,
+          "quality_vs_wan50": -0.61,
+          "axes": {
+            "prompt_adherence": -0.64,
+            "action_adherence": -0.61,
+            "camera_adherence": -0.58,
+            "dynamic_degree": -0.64,
+            "subject_consistency": -0.61,
+            "background_consistency": -0.58,
+            "image_quality": -0.64,
+            "temporal_smoothness": -0.61
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "ffb50105e1f31c4b988626bc88a6526bafc2678a0003abb937a9e0193931a391",
+              "src": "/media/ffb50105e1f31c4b988626bc88a6526bafc2678a0003abb937a9e0193931a391.mp4",
+              "poster": "/media/a22f6a16199051d577164b262be352df88e88b6e1441972e210661380f5568e3.jpg",
+              "seconds": 294.5,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            },
+            "challenger": {
+              "sha256": "9869358ed7176cec586da76a06ddfa076221297b74ae3122db79cbcffe220a2a",
+              "src": "/media/9869358ed7176cec586da76a06ddfa076221297b74ae3122db79cbcffe220a2a.mp4",
+              "poster": "/media/fe40ea0bb8bccc35231a5af968b749f98f982f5eaf9ba6907325c304ab5143f5.jpg",
+              "seconds": 9.49,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

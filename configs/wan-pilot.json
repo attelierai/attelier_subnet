@@ -1,0 +1,70 @@
+{
+  "base_model_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+  "base_model_revision": "0fad780a534b6463e45facd96134c9f345acfa5b",
+  "format": "safetensors",
+  "max_steps": 16,
+  "reference_steps": 50,
+  "max_forward_passes": 32,
+  "width": 256,
+  "height": 256,
+  "frames": 17,
+  "fps": 16,
+  "scheduler_shift": 3.0,
+  "min_speedup": 1.1,
+  "wall_time_limit_seconds": 900.0,
+  "vram_limit_bytes": 25769803776,
+  "axes": [
+    "prompt_adherence",
+    "motion_adherence",
+    "camera_adherence",
+    "subject_consistency",
+    "temporal_stability",
+    "motion_quality",
+    "visual_quality",
+    "physical_plausibility"
+  ],
+  "axis_weights": {
+    "prompt_adherence": 0.125,
+    "motion_adherence": 0.125,
+    "camera_adherence": 0.125,
+    "subject_consistency": 0.125,
+    "temporal_stability": 0.125,
+    "motion_quality": 0.125,
+    "visual_quality": 0.125,
+    "physical_plausibility": 0.125
+  },
+  "score_mean_weight": 0.6,
+  "score_worst_weight": 0.4,
+  "worst_axis_count": 3,
+  "stage_sizes": {
+    "screen": [
+      2,
+      1
+    ],
+    "duel": [
+      2,
+      1
+    ],
+    "confirmation": [
+      2,
+      1
+    ]
+  },
+  "min_effect": 0.02,
+  "alpha": 0.05,
+  "max_candidates": 16,
+  "protected_axes": [
+    "prompt_adherence",
+    "motion_adherence",
+    "camera_adherence",
+    "subject_consistency",
+    "temporal_stability",
+    "motion_quality",
+    "visual_quality",
+    "physical_plausibility"
+  ],
+  "protected_slices": [],
+  "axis_noninferiority_margin": 0.02,
+  "failure_rate_cap": 0.05,
+  "grammar_version": "forge/bench/grammar/v1"
+}

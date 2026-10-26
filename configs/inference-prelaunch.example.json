@@ -1,0 +1,29 @@
+{
+  "schema": "attelier/prelaunch-policy/v1",
+  "network": "finney",
+  "genesis": "0x2f0555cc76fc2840a25a6ea3b9637146806f1f44b090c175ffde2a7e5ab36c03",
+  "netuid": 126,
+  "mechanism": 0,
+  "gatewayPolicy": {
+    "minSuccessBps": 9500,
+    "maxTtvMs": 180000,
+    "serviceProfile": {
+      "id": "h3-base-5s-480p-20-v1",
+      "hash": "REPLACE_WITH_64_LOWERCASE_HEX_PROFILE_HASH",
+      "durationMs": 5000,
+      "resolution": "480p"
+    }
+  },
+  "workers": [
+    {
+      "minerHotkey": "REPLACE_WITH_REGISTERED_SN126_HOTKEY",
+      "workerId": "REPLACE_WITH_DURABLE_WORKER_ID",
+      "trustMode": "operator_whitelist"
+    }
+  ],
+  "simulation": {
+    "serviceBudgetBps": 125,
+    "targetVideosPerDay": 600,
+    "nominalMinerEmissionRaoPerDay": "2952000000000"
+  }
+}

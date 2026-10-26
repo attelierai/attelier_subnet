@@ -1,0 +1,11 @@
+{
+  "cap_usd": 5.0,
+  "api_limit_usd": 1.2,
+  "ancillary_limit_usd": 0.35,
+  "contingency_usd": 0.5,
+  "compute_usd_hour": 1.01,
+  "backup_seconds": 300,
+  "closure_seconds": 180,
+  "poll_seconds": 10,
+  "provider_timeout_seconds": 30
+}

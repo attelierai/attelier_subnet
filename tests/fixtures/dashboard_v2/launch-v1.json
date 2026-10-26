@@ -1,0 +1,827 @@
+{
+  "_fixture": "Synthetic launch V1 fixture derived from genesis.json for browser checks only: an older chain round plus an operator experiment. The king, repositories, revisions, weight files, file hashes, VideoReward open_quality and every measurement are fake test data, never published evidence; contract.launch_v1 copies the frozen policy shape. Wallets use standard development identities.",
+  "schema": "forge/dashboard/v2",
+  "updated_at": "2026-10-04T16:30:00Z",
+  "network": {
+    "name": "test",
+    "netuid": 578
+  },
+  "base_model": {
+    "name": "Wan2.1 T2V 1.3B",
+    "repo": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+    "revision": "0fad780a534b6463e45facd96134c9f345acfa5b",
+    "url": "https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B-Diffusers/tree/0fad780a534b6463e45facd96134c9f345acfa5b",
+    "steps": 50
+  },
+  "contract": {
+    "min_speedup": 1.1,
+    "quality_margin": 0.02,
+    "axes": [
+      "prompt_adherence",
+      "action_adherence",
+      "camera_adherence",
+      "dynamic_degree",
+      "subject_consistency",
+      "background_consistency",
+      "image_quality",
+      "temporal_smoothness"
+    ],
+    "consensus_rule": "stake_majority_v2",
+    "reference_steps": 50,
+    "launch_v1": {
+      "schema": "forge/launch-policy/v1",
+      "version": 1,
+      "status": "PROVISIONAL_NOT_PERCEPTUALLY_CALIBRATED",
+      "sample_counts": {
+        "quality_prompts": 16,
+        "timing_prompts": 8
+      },
+      "speed": {
+        "minimum_ratio": 1.1,
+        "confidence": 0.95,
+        "timing_order": "R,C,C,R"
+      },
+      "quality_margins": {
+        "VQ": 0.35,
+        "MQ": 0.2,
+        "TA": 0.2
+      },
+      "temporal_guards": {
+        "exact_freeze": {
+          "candidate_frozen_fraction": 0.95,
+          "reference_below": 0.95
+        },
+        "steady_lighting": {
+          "add": 2,
+          "multiple": 3,
+          "floor": 0.1
+        },
+        "continuous_motion": {
+          "add": 1.5,
+          "multiple": 4,
+          "floor": 0.1
+        }
+      },
+      "limits": [
+        "No human-label calibration is asserted.",
+        "No aggregate or sum of VideoReward heads is used.",
+        "Temporal guards are only applicable to explicitly tagged prompts.",
+        "PROMOTE_ELIGIBLE never activates weights."
+      ],
+      "policy_id": "67745893df7246e2adade5e755f2f04ce5dd6dcd23ef24d305387c09e53674fd"
+    }
+  },
+  "king": {
+    "hotkey": "5FixtureLaunchKingKINGKINGKINGKINGKINGKINGKINGKI",
+    "uid": 2,
+    "label": "Fixture King Distill \u00b7 25 steps",
+    "model": {
+      "repo": "fixture-attelier/king-distill-wan21",
+      "revision": "3c5e1f0a9b8d7c6e5f4a3b2c1d0e9f8a7b6c5d4e",
+      "url": "https://huggingface.co/fixture-attelier/king-distill-wan21/tree/3c5e1f0a9b8d7c6e5f4a3b2c1d0e9f8a7b6c5d4e",
+      "steps": 25,
+      "guidance": 5,
+      "manifest_hash": "4b1d2c3e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff001",
+      "license": "apache-2.0",
+      "role": "full",
+      "files": [
+        {
+          "path": "transformer/diffusion_pytorch_model.safetensors",
+          "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "size_bytes": 2838540288,
+          "url": "https://huggingface.co/fixture-attelier/king-distill-wan21/resolve/3c5e1f0a9b8d7c6e5f4a3b2c1d0e9f8a7b6c5d4e/transformer/diffusion_pytorch_model.safetensors"
+        },
+        {
+          "path": "model_index.json",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size_bytes": 512,
+          "url": "https://huggingface.co/fixture-attelier/king-distill-wan21/resolve/3c5e1f0a9b8d7c6e5f4a3b2c1d0e9f8a7b6c5d4e/model_index.json"
+        }
+      ]
+    },
+    "manifest_hash": "4b1d2c3e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff001",
+    "since_block": 8148100,
+    "crown_id": "c0ffee0012345678c0ffee0012345678c0ffee0012345678c0ffee0012345678",
+    "speed_ratio_vs_wan50": 1.8,
+    "quality_vs_wan50": null
+  },
+  "crowns": [
+    {
+      "crown_id": "c0ffee0012345678c0ffee0012345678c0ffee0012345678c0ffee0012345678",
+      "hotkey": "5FixtureLaunchKingKINGKINGKINGKINGKINGKINGKINGKI",
+      "label": "Fixture King Distill \u00b7 25 steps",
+      "block": 8148100,
+      "speed_ratio": 1.8,
+      "quality": null
+    }
+  ],
+  "validators": [
+    {
+      "uid": 0,
+      "hotkey": "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+      "stake": 104289.154491905,
+      "active": true
+    },
+    {
+      "uid": 3,
+      "hotkey": "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy",
+      "stake": 1.918128626,
+      "active": true
+    }
+  ],
+  "rounds": [
+    {
+      "round_id": "test-578-b8148666-e8148668",
+      "stage": "final",
+      "diagnostic": false,
+      "close_block": 8148666,
+      "entropy_block": 8148668,
+      "commit_close_block": 8148700,
+      "committee": [
+        {
+          "hotkey": "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+          "stake": 104289.154491905
+        },
+        {
+          "hotkey": "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy",
+          "stake": 1.918128626
+        }
+      ],
+      "challengers": [
+        "uid5-poor"
+      ]
+    },
+    {
+      "round_id": "operator-launch-v1-20261004-1500",
+      "origin": "operator_experiment",
+      "created_at": "2026-10-04T15:00:00Z",
+      "stage": "final",
+      "diagnostic": true,
+      "close_block": null,
+      "entropy_block": null,
+      "commit_close_block": null,
+      "committee": [],
+      "challengers": [
+        "uid6-fast",
+        "uid4-equal",
+        "uid9-partial"
+      ]
+    }
+  ],
+  "challengers": [
+    {
+      "id": "uid6-fast",
+      "round_id": "operator-launch-v1-20261004-1500",
+      "label": "Fixture Turbo LoRA \u00b7 8 steps",
+      "hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+      "uid": 6,
+      "model": {
+        "repo": "fixture-attelier/turbo-lora-wan21",
+        "revision": "8a1f2e3d4c5b6a7980f1e2d3c4b5a69788796a5b",
+        "url": "https://huggingface.co/fixture-attelier/turbo-lora-wan21/tree/8a1f2e3d4c5b6a7980f1e2d3c4b5a69788796a5b",
+        "steps": 8,
+        "guidance": 5,
+        "manifest_hash": "56db68e623936f5eac1e9475c252e27c42c5a7fe05ab460700ed5b269abfe7e7",
+        "license": "apache-2.0",
+        "role": "lora",
+        "base": {
+          "repo": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+          "revision": "0fad780a534b6463e45facd96134c9f345acfa5b",
+          "url": "https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B-Diffusers/tree/0fad780a534b6463e45facd96134c9f345acfa5b"
+        },
+        "files": [
+          {
+            "path": "adapter_model.safetensors",
+            "sha256": "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
+            "size_bytes": 151142400,
+            "url": "https://huggingface.co/fixture-attelier/turbo-lora-wan21/resolve/8a1f2e3d4c5b6a7980f1e2d3c4b5a69788796a5b/adapter_model.safetensors"
+          },
+          {
+            "path": "adapter_config.json",
+            "sha256": "fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9",
+            "size_bytes": 912,
+            "url": "https://huggingface.co/fixture-attelier/turbo-lora-wan21/resolve/8a1f2e3d4c5b6a7980f1e2d3c4b5a69788796a5b/adapter_config.json"
+          }
+        ]
+      },
+      "manifest_hash": "56db68e623936f5eac1e9475c252e27c42c5a7fe05ab460700ed5b269abfe7e7",
+      "commit_block": 8148602,
+      "status": "diagnostic"
+    },
+    {
+      "id": "uid4-equal",
+      "round_id": "operator-launch-v1-20261004-1500",
+      "label": "Fixture consistency-distilled Wan2.1 with temporal-attention pruning and an intentionally very long model name for wrapping checks \u00b7 20 steps",
+      "hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+      "uid": 4,
+      "model": {
+        "repo": "fixture-attelier/wan21-t2v-1.3b-consistency-distilled-temporal-attention-pruned-20-steps-long-repository-name",
+        "revision": "b7e6d5c4b3a29180f7e6d5c4b3a2918007f6e5d4",
+        "url": "https://huggingface.co/fixture-attelier/wan21-t2v-1.3b-consistency-distilled-temporal-attention-pruned-20-steps-long-repository-name/tree/b7e6d5c4b3a29180f7e6d5c4b3a2918007f6e5d4",
+        "steps": 20,
+        "guidance": 5,
+        "manifest_hash": "2e97c6d60c25c9a4712964c209342f868c8416e225fc3f40c92f58e69e90a05a",
+        "license": "cc-by-nc-4.0",
+        "role": "full",
+        "files": [
+          {
+            "path": "transformer/diffusion_pytorch_model-00001-of-00002.safetensors",
+            "sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+            "size_bytes": 4993206272,
+            "url": "https://huggingface.co/fixture-attelier/wan21-t2v-1.3b-consistency-distilled-temporal-attention-pruned-20-steps-long-repository-name/resolve/b7e6d5c4b3a29180f7e6d5c4b3a2918007f6e5d4/transformer/diffusion_pytorch_model-00001-of-00002.safetensors"
+          },
+          {
+            "path": "transformer/diffusion_pytorch_model-00002-of-00002.safetensors",
+            "sha256": "b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1",
+            "size_bytes": 682672128,
+            "url": "https://huggingface.co/fixture-attelier/wan21-t2v-1.3b-consistency-distilled-temporal-attention-pruned-20-steps-long-repository-name/resolve/b7e6d5c4b3a29180f7e6d5c4b3a2918007f6e5d4/transformer/diffusion_pytorch_model-00002-of-00002.safetensors"
+          },
+          {
+            "path": "transformer/diffusion_pytorch_model.safetensors.index.json",
+            "sha256": "c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2",
+            "size_bytes": 96412,
+            "url": "https://huggingface.co/fixture-attelier/wan21-t2v-1.3b-consistency-distilled-temporal-attention-pruned-20-steps-long-repository-name/resolve/b7e6d5c4b3a29180f7e6d5c4b3a2918007f6e5d4/transformer/diffusion_pytorch_model.safetensors.index.json"
+          },
+          {
+            "path": "scheduler/scheduler_config_with_an_intentionally_long_file_name_for_wrapping_checks.json",
+            "sha256": "d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3",
+            "size_bytes": 488,
+            "url": "https://huggingface.co/fixture-attelier/wan21-t2v-1.3b-consistency-distilled-temporal-attention-pruned-20-steps-long-repository-name/resolve/b7e6d5c4b3a29180f7e6d5c4b3a2918007f6e5d4/scheduler/scheduler_config_with_an_intentionally_long_file_name_for_wrapping_checks.json"
+          }
+        ]
+      },
+      "manifest_hash": "2e97c6d60c25c9a4712964c209342f868c8416e225fc3f40c92f58e69e90a05a",
+      "commit_block": 8148595,
+      "status": "diagnostic"
+    },
+    {
+      "id": "uid9-partial",
+      "round_id": "operator-launch-v1-20261004-1500",
+      "label": "Fixture Partial \u00b7 16 steps",
+      "hotkey": "5FixtureLaunchPartialPARTIALPARTIALPARTIALPARTIAL",
+      "uid": 9,
+      "model": {
+        "repo": "fixture-attelier/partial-wan21",
+        "revision": "d4c3b2a1908f7e6d5c4b3a2918f7e6d5c4b3a291",
+        "url": "https://huggingface.co/fixture-attelier/partial-wan21/tree/d4c3b2a1908f7e6d5c4b3a2918f7e6d5c4b3a291",
+        "steps": 16,
+        "guidance": 5,
+        "manifest_hash": "e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4",
+        "license": "apache-2.0",
+        "role": "full",
+        "files": [
+          {
+            "path": "transformer/diffusion_pytorch_model.safetensors",
+            "sha256": "f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5",
+            "size_bytes": 2838540288,
+            "url": "https://huggingface.co/fixture-attelier/partial-wan21/resolve/d4c3b2a1908f7e6d5c4b3a2918f7e6d5c4b3a291/transformer/diffusion_pytorch_model.safetensors"
+          }
+        ]
+      },
+      "manifest_hash": "e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4",
+      "commit_block": 8148604,
+      "status": "diagnostic"
+    },
+    {
+      "id": "uid5-poor",
+      "round_id": "test-578-b8148666-e8148668",
+      "label": "Wan2.1 \u00b7 1 step (control)",
+      "hotkey": "5HGjWAeFDfFCWPsjFQdVV2Msvz2XtMktvgocEZcCj68kUMaw",
+      "uid": 5,
+      "model": {
+        "repo": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+        "revision": "0fad780a534b6463e45facd96134c9f345acfa5b",
+        "url": "https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B-Diffusers/tree/0fad780a534b6463e45facd96134c9f345acfa5b",
+        "steps": 1,
+        "guidance": 1
+      },
+      "manifest_hash": "74a0ffdccc7f4100e90a66ca2bd547fc5deb4e7c6b4a8930c3c211206dfc469e",
+      "commit_block": 8148600,
+      "status": "kept"
+    }
+  ],
+  "evaluations": [
+    {
+      "challenger_id": "uid6-fast",
+      "plan_hash": "4e776c14dcccf3aa7076ffbf2e81cccece0d21a5f661f61ebe078c2cf5425266",
+      "verdict": {
+        "status": "DIAGNOSTIC",
+        "reasons": [
+          "Operator experiment: diagnostic, no rewards"
+        ],
+        "speed_ratio": 1.84,
+        "speed_range": [
+          1.82,
+          1.85
+        ],
+        "quality_vs_king": null,
+        "quality_vs_wan50": null
+      },
+      "open_quality": {
+        "evaluator": "VideoReward",
+        "policy_id": "67745893df7246e2adade5e755f2f04ce5dd6dcd23ef24d305387c09e53674fd",
+        "evaluator_id": "e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1",
+        "units": "normalized_reward",
+        "status": "PROMOTE_ELIGIBLE",
+        "quality": {
+          "king": {
+            "VQ": {
+              "mean_delta": 0.041,
+              "lower_ci": -0.112,
+              "margin": 0.35
+            },
+            "MQ": {
+              "mean_delta": -0.018,
+              "lower_ci": -0.143,
+              "margin": 0.2
+            },
+            "TA": {
+              "mean_delta": 0.006,
+              "lower_ci": -0.097,
+              "margin": 0.2
+            }
+          },
+          "anchor": {
+            "VQ": {
+              "mean_delta": -0.087,
+              "lower_ci": -0.296,
+              "margin": 0.35
+            },
+            "MQ": {
+              "mean_delta": -0.052,
+              "lower_ci": -0.181,
+              "margin": 0.2
+            },
+            "TA": {
+              "mean_delta": 0.012,
+              "lower_ci": -0.071,
+              "margin": 0.2
+            }
+          }
+        },
+        "speed": {
+          "ratio": 1.84,
+          "lower_ci": 1.79
+        },
+        "temporal_violations": [],
+        "provisional": true
+      },
+      "consensus": {
+        "rule": "stake_majority_v2",
+        "favorable_stake": 0,
+        "total_stake": 0,
+        "reports": []
+      },
+      "prompts": [
+        {
+          "id": "diagnostic-human-static-natural-0",
+          "text": "Photorealistic footage of a gardener watering flowers, in cool evening light. The camera remains fixed.",
+          "category": {
+            "subject": "human",
+            "camera": "static",
+            "style": "natural"
+          },
+          "validators": [
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": false,
+          "speed_ratio": 1.84,
+          "quality_vs_king": null,
+          "quality_vs_wan50": null,
+          "axes": null,
+          "videos": {
+            "wan50": {
+              "sha256": "1bb0daf462e8f11956e00b17512611527862aa9e85d72cc5d739d7adf450fb2b",
+              "src": "/media/1bb0daf462e8f11956e00b17512611527862aa9e85d72cc5d739d7adf450fb2b.mp4",
+              "poster": "/media/d934e87071b3954dfa28961bd83a56b8cf15158025b860f6035f1d917d021750.jpg",
+              "seconds": 262,
+              "gpu": "RTX 6000 Ada \u00b7 B"
+            },
+            "challenger": {
+              "sha256": "4b9ac514d6a9c0718acf352f50b006d83059793ef983d4f18f7aea5289cdfb36",
+              "src": "/media/4b9ac514d6a9c0718acf352f50b006d83059793ef983d4f18f7aea5289cdfb36.mp4",
+              "poster": "/media/9e26be27f73380f0869f55032053ed46893a10917fa31bec6a0048c76050a032.jpg",
+              "seconds": 142.39,
+              "gpu": "RTX 6000 Ada \u00b7 B"
+            }
+          }
+        },
+        {
+          "id": "diagnostic-object-static-natural-0",
+          "text": "Photorealistic footage of a paper boat floating in a stream, in overcast daylight. The camera remains fixed.",
+          "category": {
+            "subject": "object",
+            "camera": "static",
+            "style": "natural"
+          },
+          "validators": [
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": true,
+          "speed_ratio": 1.85,
+          "quality_vs_king": null,
+          "quality_vs_wan50": null,
+          "axes": null,
+          "videos": {
+            "wan50": {
+              "sha256": "814f5f6650da1f39d5fb8f29c47aec98f1d1d1d66d0537d7bc2cddc15e86b0c6",
+              "src": "/media/814f5f6650da1f39d5fb8f29c47aec98f1d1d1d66d0537d7bc2cddc15e86b0c6.mp4",
+              "poster": "/media/e0623cf14bf38d22040fe26d7651bd2a15bfcf2df08e557c9cbd38aea839ad07.jpg",
+              "seconds": 275,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            },
+            "challenger": {
+              "sha256": "6c5cd40561c26ef13fee39c8b5f997aa1e1de145b299d971b40df7e112239798",
+              "src": "/media/6c5cd40561c26ef13fee39c8b5f997aa1e1de145b299d971b40df7e112239798.mp4",
+              "poster": "/media/69180550a986a1ccb802b6632c9939df32b2a5a7c3dc40c552058c3f8391e535.jpg",
+              "seconds": 148.65,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "challenger_id": "uid4-equal",
+      "plan_hash": "db9adf37c49d813f214411289abd64619dafecc68a6fd6ca963f840abe7ab02a",
+      "verdict": {
+        "status": "DIAGNOSTIC",
+        "reasons": [
+          "Operator experiment: diagnostic, no rewards"
+        ],
+        "speed_ratio": 1.31,
+        "speed_range": [
+          1.29,
+          1.33
+        ],
+        "quality_vs_king": null,
+        "quality_vs_wan50": null
+      },
+      "open_quality": {
+        "evaluator": "VideoReward",
+        "policy_id": "67745893df7246e2adade5e755f2f04ce5dd6dcd23ef24d305387c09e53674fd",
+        "evaluator_id": "e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1",
+        "units": "normalized_reward",
+        "status": "FAIL",
+        "quality": {
+          "king": {
+            "VQ": {
+              "mean_delta": -0.214,
+              "lower_ci": -0.398,
+              "margin": 0.35
+            },
+            "MQ": {
+              "mean_delta": -0.731,
+              "lower_ci": -1.012,
+              "margin": 0.2
+            },
+            "TA": {
+              "mean_delta": 0.004,
+              "lower_ci": -0.088,
+              "margin": 0.2
+            }
+          },
+          "anchor": {
+            "VQ": {
+              "mean_delta": -0.302,
+              "lower_ci": -0.489,
+              "margin": 0.35
+            },
+            "MQ": {
+              "mean_delta": -1.084,
+              "lower_ci": -1.371,
+              "margin": 0.2
+            },
+            "TA": {
+              "mean_delta": -0.021,
+              "lower_ci": -0.119,
+              "margin": 0.2
+            }
+          }
+        },
+        "speed": {
+          "ratio": 1.31,
+          "lower_ci": 1.27
+        },
+        "temporal_violations": [
+          {
+            "prompt_id": "diagnostic-object-static-natural-0",
+            "reference": "anchor",
+            "violation": "continuous_motion_temporal_violation"
+          }
+        ],
+        "provisional": true
+      },
+      "consensus": {
+        "rule": "stake_majority_v2",
+        "favorable_stake": 0,
+        "total_stake": 0,
+        "reports": []
+      },
+      "prompts": [
+        {
+          "id": "diagnostic-human-static-natural-0",
+          "text": "Photorealistic footage of a gardener watering flowers, in cool evening light. The camera remains fixed.",
+          "category": {
+            "subject": "human",
+            "camera": "static",
+            "style": "natural"
+          },
+          "validators": [
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": false,
+          "speed_ratio": 1.3,
+          "quality_vs_king": null,
+          "quality_vs_wan50": null,
+          "axes": null,
+          "videos": {
+            "wan50": {
+              "sha256": "1bb0daf462e8f11956e00b17512611527862aa9e85d72cc5d739d7adf450fb2b",
+              "src": "/media/1bb0daf462e8f11956e00b17512611527862aa9e85d72cc5d739d7adf450fb2b.mp4",
+              "poster": "/media/d934e87071b3954dfa28961bd83a56b8cf15158025b860f6035f1d917d021750.jpg",
+              "seconds": 262,
+              "gpu": "RTX 6000 Ada \u00b7 B"
+            },
+            "challenger": {
+              "sha256": "c6350d61d80c33f90cbe02b28538361e9266fed5a98dc29408329ed84be1ca9d",
+              "src": "/media/c6350d61d80c33f90cbe02b28538361e9266fed5a98dc29408329ed84be1ca9d.mp4",
+              "poster": "/media/e063982671389775756e0da82d50fe2e84909b6b128f4cf83e70a707aae56766.jpg",
+              "seconds": 201.54,
+              "gpu": "RTX 6000 Ada \u00b7 B"
+            }
+          }
+        },
+        {
+          "id": "diagnostic-object-static-natural-0",
+          "text": "Photorealistic footage of a paper boat floating in a stream, in overcast daylight. The camera remains fixed.",
+          "category": {
+            "subject": "object",
+            "camera": "static",
+            "style": "natural"
+          },
+          "validators": [
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": true,
+          "speed_ratio": 1.32,
+          "quality_vs_king": null,
+          "quality_vs_wan50": null,
+          "axes": null,
+          "videos": {
+            "wan50": {
+              "sha256": "814f5f6650da1f39d5fb8f29c47aec98f1d1d1d66d0537d7bc2cddc15e86b0c6",
+              "src": "/media/814f5f6650da1f39d5fb8f29c47aec98f1d1d1d66d0537d7bc2cddc15e86b0c6.mp4",
+              "poster": "/media/e0623cf14bf38d22040fe26d7651bd2a15bfcf2df08e557c9cbd38aea839ad07.jpg",
+              "seconds": 275,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            },
+            "challenger": {
+              "sha256": "fe1be019017fb88502acf216cf690001a5ad39b50f1ba0b7b4ba10b41473cc7c",
+              "src": "/media/fe1be019017fb88502acf216cf690001a5ad39b50f1ba0b7b4ba10b41473cc7c.mp4",
+              "poster": "/media/ae17b3daf02949850fd5d22b4245721e3650729094b7d617c78efaa4e238d365.jpg",
+              "seconds": 208.33,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "challenger_id": "uid9-partial",
+      "plan_hash": "0718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6",
+      "verdict": {
+        "status": "DIAGNOSTIC",
+        "reasons": [
+          "Operator experiment: diagnostic, no rewards"
+        ],
+        "speed_ratio": 1.52,
+        "speed_range": [
+          1.52,
+          1.52
+        ],
+        "quality_vs_king": null,
+        "quality_vs_wan50": null
+      },
+      "open_quality": {
+        "evaluator": "VideoReward",
+        "policy_id": "67745893df7246e2adade5e755f2f04ce5dd6dcd23ef24d305387c09e53674fd",
+        "evaluator_id": "e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1e7a1",
+        "units": "normalized_reward",
+        "status": "INCOMPLETE",
+        "quality": {
+          "king": {
+            "VQ": {
+              "mean_delta": 0.022,
+              "lower_ci": -0.131,
+              "margin": 0.35
+            },
+            "MQ": {
+              "mean_delta": -0.034,
+              "lower_ci": -0.176,
+              "margin": 0.2
+            },
+            "TA": null
+          },
+          "anchor": {
+            "VQ": {
+              "mean_delta": -0.064,
+              "lower_ci": -0.241,
+              "margin": 0.35
+            },
+            "MQ": {
+              "mean_delta": -0.071,
+              "lower_ci": null,
+              "margin": 0.2
+            }
+          }
+        },
+        "speed": {
+          "ratio": 1.52,
+          "lower_ci": null
+        },
+        "provisional": true
+      },
+      "consensus": {
+        "rule": "stake_majority_v2",
+        "favorable_stake": 0,
+        "total_stake": 0,
+        "reports": []
+      },
+      "prompts": [
+        {
+          "id": "diagnostic-object-static-natural-0",
+          "text": "Photorealistic footage of a paper boat floating in a stream, in overcast daylight. The camera remains fixed.",
+          "category": {
+            "subject": "object",
+            "camera": "static",
+            "style": "natural"
+          },
+          "validators": [
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": true,
+          "speed_ratio": 1.52,
+          "quality_vs_king": null,
+          "quality_vs_wan50": null,
+          "axes": null,
+          "videos": {
+            "wan50": {
+              "sha256": "814f5f6650da1f39d5fb8f29c47aec98f1d1d1d66d0537d7bc2cddc15e86b0c6",
+              "src": "/media/814f5f6650da1f39d5fb8f29c47aec98f1d1d1d66d0537d7bc2cddc15e86b0c6.mp4",
+              "poster": "/media/e0623cf14bf38d22040fe26d7651bd2a15bfcf2df08e557c9cbd38aea839ad07.jpg",
+              "seconds": 275,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            },
+            "challenger": {
+              "sha256": "6c5cd40561c26ef13fee39c8b5f997aa1e1de145b299d971b40df7e112239798",
+              "src": "/media/6c5cd40561c26ef13fee39c8b5f997aa1e1de145b299d971b40df7e112239798.mp4",
+              "poster": "/media/69180550a986a1ccb802b6632c9939df32b2a5a7c3dc40c552058c3f8391e535.jpg",
+              "seconds": 180.92,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "challenger_id": "uid5-poor",
+      "plan_hash": "7e029c2d4badbedcdf1217e70f0fd5e3bcd002dbe2c43ff315127df32c2b026d",
+      "verdict": {
+        "status": "KEEP",
+        "reasons": [
+          "Quality below the margin on 8 axes"
+        ],
+        "speed_ratio": 31.01,
+        "speed_range": [
+          31,
+          31.02
+        ],
+        "quality_vs_king": -0.6,
+        "quality_vs_wan50": -0.62
+      },
+      "consensus": {
+        "rule": "stake_majority_v2",
+        "favorable_stake": 0,
+        "total_stake": 104291.072620531,
+        "reports": [
+          {
+            "validator": "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+            "prompts": [
+              "diagnostic-object-static-natural-0"
+            ],
+            "audits": [
+              "diagnostic-object-static-natural-0"
+            ],
+            "report_sha256": "5261042b091fdd864c4c2875e0ff6f3c001ec4224d74c51edc04d063d8a3b2b1",
+            "anchor_block": 8148690,
+            "status": "valid"
+          },
+          {
+            "validator": "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy",
+            "prompts": [
+              "diagnostic-human-static-natural-0",
+              "diagnostic-object-static-natural-0"
+            ],
+            "audits": [
+              "diagnostic-object-static-natural-0"
+            ],
+            "report_sha256": "e8c1bcfc798844a49826302bd6ac56ab5466d32d2f11448a0256d4c56b6fba19",
+            "anchor_block": 8148693,
+            "status": "valid"
+          }
+        ]
+      },
+      "prompts": [
+        {
+          "id": "diagnostic-human-static-natural-0",
+          "text": "Photorealistic footage of a gardener watering flowers, in cool evening light. The camera remains fixed.",
+          "category": {
+            "subject": "human",
+            "camera": "static",
+            "style": "natural"
+          },
+          "validators": [
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": false,
+          "speed_ratio": 31,
+          "quality_vs_king": -0.6,
+          "quality_vs_wan50": -0.63,
+          "axes": {
+            "prompt_adherence": -0.66,
+            "action_adherence": -0.63,
+            "camera_adherence": -0.6,
+            "dynamic_degree": -0.66,
+            "subject_consistency": -0.63,
+            "background_consistency": -0.6,
+            "image_quality": -0.66,
+            "temporal_smoothness": -0.63
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "1bb0daf462e8f11956e00b17512611527862aa9e85d72cc5d739d7adf450fb2b",
+              "src": "/media/1bb0daf462e8f11956e00b17512611527862aa9e85d72cc5d739d7adf450fb2b.mp4",
+              "poster": "/media/d934e87071b3954dfa28961bd83a56b8cf15158025b860f6035f1d917d021750.jpg",
+              "seconds": 262,
+              "gpu": "RTX 6000 Ada \u00b7 B"
+            },
+            "challenger": {
+              "sha256": "cf3bdec60a3aea37d4d2c6236c49bed734f0008b1b3f1d8e315c29b75ee14442",
+              "src": "/media/cf3bdec60a3aea37d4d2c6236c49bed734f0008b1b3f1d8e315c29b75ee14442.mp4",
+              "poster": "/media/fc4e3ddc3683c0bec76d5d1b0dbb7ee6f3af52b242737a147da4e2c698ff3fa0.jpg",
+              "seconds": 8.45,
+              "gpu": "RTX 6000 Ada \u00b7 B"
+            }
+          }
+        },
+        {
+          "id": "diagnostic-object-static-natural-0",
+          "text": "Photorealistic footage of a paper boat floating in a stream, in overcast daylight. The camera remains fixed.",
+          "category": {
+            "subject": "object",
+            "camera": "static",
+            "style": "natural"
+          },
+          "validators": [
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+            "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+          ],
+          "audit": true,
+          "speed_ratio": 31.02,
+          "quality_vs_king": -0.61,
+          "quality_vs_wan50": -0.63,
+          "axes": {
+            "prompt_adherence": -0.66,
+            "action_adherence": -0.63,
+            "camera_adherence": -0.6,
+            "dynamic_degree": -0.66,
+            "subject_consistency": -0.63,
+            "background_consistency": -0.6,
+            "image_quality": -0.66,
+            "temporal_smoothness": -0.63
+          },
+          "videos": {
+            "wan50": {
+              "sha256": "814f5f6650da1f39d5fb8f29c47aec98f1d1d1d66d0537d7bc2cddc15e86b0c6",
+              "src": "/media/814f5f6650da1f39d5fb8f29c47aec98f1d1d1d66d0537d7bc2cddc15e86b0c6.mp4",
+              "poster": "/media/e0623cf14bf38d22040fe26d7651bd2a15bfcf2df08e557c9cbd38aea839ad07.jpg",
+              "seconds": 275,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            },
+            "challenger": {
+              "sha256": "5ab1be1f7035b10ad8b6eb5f684069a2be50e9a3a3eee3841fe08f017ee89a88",
+              "src": "/media/5ab1be1f7035b10ad8b6eb5f684069a2be50e9a3a3eee3841fe08f017ee89a88.mp4",
+              "poster": "/media/458adea0c2cf837f1bb7ead9ac22a64aa6e5cf6ad2ae7c4bce636954266cf496.jpg",
+              "seconds": 8.87,
+              "gpu": "RTX 6000 Ada \u00b7 A"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
