@@ -344,6 +344,15 @@ def test_hourly_live_feed_requires_fixed_five_percent_and_preserves_quantized_ra
     live = canonical(envelope)
     verified = verify_feed(live, public, now_ms=7_200_001, allow_live=True)
     assert verified["mode"] == "live"
+    # Default review accepts the canonical live hourly feed but remains the
+    # existing unsigned simulation boundary (no wallet or publisher exists).
+    reviewed = LightRunner(
+        tmp_path / "default-live-review",
+        public,
+        allow_live=True,
+        registry_verifier=lambda _: None,
+    ).process(live, now_ms=7_200_001)
+    assert reviewed["simulationOnly"] is True and reviewed["chainCalls"] == []
     with pytest.raises(LightError, match="light_mode"):
         verify_feed(live, public, now_ms=7_200_001)
     vector = relative_vector({4: 1})

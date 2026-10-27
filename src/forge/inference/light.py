@@ -282,6 +282,7 @@ class LightRunner:
         *,
         registry_verifier: Callable[[dict[str, Any]], None] = verify_finalized_registry,
         allow_live: bool = False,
+        writer_lock: bool = False,
     ) -> None:
         _raw_public_key(public_key)
         self.state_dir, self.public_key, self.registry_verifier, self.allow_live = (
@@ -292,10 +293,10 @@ class LightRunner:
         )
         state_dir.mkdir(parents=True, exist_ok=True)
         self._lock = None
-        if allow_live:
+        if writer_lock:
             # SQLite serializes transactions in one directory.  This lock makes
-            # productive writer ownership explicit; shadow review remains safe
-            # to run concurrently because it cannot sign or submit.
+            # productive writer ownership explicit; unsigned review remains
+            # safe to run concurrently because it cannot sign or submit.
             self._lock = (state_dir / "light.lock").open("a+", encoding="utf8")
             try:
                 fcntl.flock(self._lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -448,7 +449,11 @@ def main() -> None:
     if args.live and not args.dry_run and (not args.wallet or not args.hotkey):
         parser.error("--live requires explicit --wallet and --hotkey")
     try:
-        runner = LightRunner(args.state_dir, default_public_key(), allow_live=args.live)
+        # A fresh signed live feed is also valid unsigned review input. Only
+        # --live takes the writer lock and constructs wallet/chain boundaries.
+        runner = LightRunner(
+            args.state_dir, default_public_key(), allow_live=True, writer_lock=args.live
+        )
     except (LightError, OSError, sqlite3.Error, ValueError) as error:
         reason = str(error) if isinstance(error, LightError) else "light_unavailable"
         print(reason, flush=True)

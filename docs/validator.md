@@ -19,6 +19,8 @@ Validation mode and publication are separate. Default `light` remains shadow,
 read-only. The productive path is explicit: `--live --wallet NAME --hotkey NAME`.
 It accepts only fresh signed one-hour Finney/SN126/M0 receipts with a fixed 500
 bps service pool; it never discovers a wallet or enables itself from a feed.
+Default shadow review also accepts those signed hourly `live` receipts, but
+only simulates them. Do not share its `--state-dir` with a `--live` writer.
 
 ## What is available now
 
