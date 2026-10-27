@@ -44,12 +44,14 @@ dev = [
 [project.scripts]
 forge = "forge.cli:main"
 forge-inference = "forge.inference.__main__:main"
+attelier-validator = "forge.inference.light:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
 "forge.chain" = ["runtime_reviews/*.json"]
+"forge.inference" = ["defaults.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

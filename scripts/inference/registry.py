@@ -82,6 +82,7 @@ def main() -> None:
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--simulation-registry-out", type=Path)
+    parser.add_argument("--dashboard-chain-out", type=Path)
     parser.add_argument(
         "--chain-snapshot", type=Path, help="Local finalized snapshot fixture; never a live proof"
     )
@@ -97,6 +98,27 @@ def main() -> None:
     atomic_replace(args.out, registry)
     if args.simulation_registry_out:
         atomic_replace(args.simulation_registry_out, simulation)
+    if args.dashboard_chain_out:
+        atomic_replace(
+            args.dashboard_chain_out,
+            {
+                "network": "finney",
+                "netuid": 126,
+                "mechanism": 0,
+                "observedAt": snapshot["timestamp"],
+                "block": snapshot["block"],
+                "hash": snapshot["blockHash"],
+                "runtime": None,
+                "mechanismCount": 1,
+                "weightsStatus": "not_observed",
+                "weightsBlock": None,
+                "observedSplit": {
+                    "optimization": None,
+                    "inference": None,
+                    "block": snapshot["block"],
+                },
+            },
+        )
 
 
 if __name__ == "__main__":

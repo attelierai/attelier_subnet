@@ -200,8 +200,11 @@ def _validate_policy(
     if type(window_ms) is not int or window_ms not in {HOUR_MS, DAY_MS}:
         _fail("policy_window")
     gateway = policy["gatewayPolicy"]
-    if set(gateway) != {"minSuccessBps", "maxTtvMs", "serviceProfile"} or not isinstance(
-        gateway["serviceProfile"], dict
+    gateway_fields = {"minSuccessBps", "maxTtvMs", "serviceProfile"}
+    if (
+        (set(gateway) != gateway_fields and set(gateway) != gateway_fields | {"rewardEligibility"})
+        or not isinstance(gateway["serviceProfile"], dict)
+        or ("rewardEligibility" in gateway and gateway["rewardEligibility"] != "per_job")
     ):
         _fail("policy_gateway")
     minimum = _integer(gateway["minSuccessBps"], "policy_success")
@@ -233,15 +236,17 @@ def _validate_policy(
             _fail("policy_worker_duplicate")
         bindings[key] = worker
     simulation = policy["simulation"]
-    if set(simulation) != {
+    simulation_fields = {
         "serviceBudgetBps",
         "targetVideosPerDay",
         "nominalMinerEmissionRaoPerDay",
-    }:
+    }
+    if set(simulation) not in (simulation_fields, simulation_fields | {"allocationMode"}):
         _fail("policy_simulation")
     if (
         not 0 < _integer(simulation["serviceBudgetBps"], "policy_budget") <= 10_000
         or _integer(simulation["targetVideosPerDay"], "policy_target") == 0
+        or simulation.get("allocationMode", "target") not in {"fixed", "target"}
     ):
         _fail("policy_simulation")
     _parse_decimal_rao(simulation["nominalMinerEmissionRaoPerDay"])
@@ -261,10 +266,7 @@ def _validate_registry(registry: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "subnetOwnerColdkey",
         "miners",
     }
-    if (
-        set(registry) != required
-        or not isinstance(registry["miners"], list)
-    ):
+    if set(registry) != required or not isinstance(registry["miners"], list):
         _fail("registry_schema")
     if (
         _integer(registry["finalizedBlock"], "registry_block") == 0
@@ -397,7 +399,12 @@ def _validate_ledger(
             or eligible_ms != eligible * profile["durationMs"]
         ):
             _fail("ledger_counts")
-        if attempted and eligible * 10_000 // attempted >= gateway["minSuccessBps"] and eligible_ms:
+        reward_eligible = (
+            gateway.get("rewardEligibility") == "per_job"
+            or attempted > 0
+            and eligible * 10_000 // attempted >= gateway["minSuccessBps"]
+        )
+        if reward_eligible and eligible_ms:
             totals[hotkey] = _safe_derived(
                 totals.get(hotkey, 0) + eligible, "derived_eligible_videos"
             )
@@ -419,6 +426,8 @@ def simulate(
     coverage_numerator = min(
         _safe_derived(total_videos * DAY_MS, "derived_coverage"), window_target_numerator
     )
+    if simulation.get("allocationMode", "target") == "fixed":
+        coverage_numerator = window_target_numerator if total_videos else 0
     coverage_denominator = window_target_numerator
     effective_budget_numerator, effective_budget_denominator = _safe_fraction(
         budget_bps * coverage_numerator, coverage_denominator, "derived_budget"
@@ -429,9 +438,7 @@ def simulate(
     miner_weights = _largest_remainder(service_weight, eligible) if service_weight else {}
     burn_weight = WEIGHT_TOTAL - service_weight
     nominal_rao = _parse_decimal_rao(simulation["nominalMinerEmissionRaoPerDay"])
-    service_rao = (
-        nominal_rao * budget_bps * coverage_numerator // (10_000 * target * DAY_MS)
-    )
+    service_rao = nominal_rao * budget_bps * coverage_numerator // (10_000 * target * DAY_MS)
     counterfactual_rao = _largest_remainder(service_rao, eligible) if service_rao else {}
     rows = []
     owner_redirected = 0
@@ -439,8 +446,8 @@ def simulate(
     for hotkey in sorted(eligible):
         miner = miners[hotkey]
         allocation = counterfactual_rao.get(hotkey, 0)
-        quantized = nominal_rao * window_ms * miner_weights.get(hotkey, 0) // (
-            DAY_MS * WEIGHT_TOTAL
+        quantized = (
+            nominal_rao * window_ms * miner_weights.get(hotkey, 0) // (DAY_MS * WEIGHT_TOTAL)
         )
         expected = 0 if miner["ownerAssociated"] else quantized
         owner_redirected += quantized - expected
@@ -490,6 +497,11 @@ def simulate(
         "createdAtMs": ledger["closedAtMs"],
         "window": ledger["window"],
         "service": {
+            **(
+                {"allocationMode": simulation["allocationMode"]}
+                if "allocationMode" in simulation
+                else {}
+            ),
             "eligibleVideos": total_videos,
             "targetVideosPerDay": target,
             "windowTargetVideos": {
@@ -549,7 +561,10 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
         "miners",
         "serviceProfile",
     }
-    if set(config) != required or config.get("schema") != "attelier/subnet-h3/v1":
+    optional = {"requireFrozenLightWindow"}
+    if (set(config) != required and set(config) != required | optional) or config.get(
+        "schema"
+    ) != "attelier/subnet-h3/v1":
         _fail("prelaunch_config_schema")
     _namespace(config, "attelier/subnet-h3/v1", "prelaunch_config_namespace")
     if (
@@ -560,6 +575,10 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
         or not isinstance(config["allowedClients"], list)
         or not isinstance(config["syntheticClientIds"], list)
         or not isinstance(config["serviceProfile"], dict)
+        or (
+            "requireFrozenLightWindow" in config
+            and type(config["requireFrozenLightWindow"]) is not bool
+        )
     ):
         _fail("prelaunch_config")
     for client in [*config["allowedClients"], *config["syntheticClientIds"]]:

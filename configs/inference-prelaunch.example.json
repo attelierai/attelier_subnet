@@ -7,9 +7,10 @@
   "gatewayPolicy": {
     "minSuccessBps": 9500,
     "maxTtvMs": 180000,
+    "rewardEligibility": "per_job",
     "serviceProfile": {
       "id": "h3-base-5s-480p-20-v1",
-      "hash": "REPLACE_WITH_64_LOWERCASE_HEX_PROFILE_HASH",
+      "hash": "eb14a780cebdacf7feed2d82be3249a8388df9dcff50bc3978ece94934b23897",
       "durationMs": 5000,
       "resolution": "480p"
     }
@@ -22,8 +23,9 @@
     }
   ],
   "simulation": {
-    "serviceBudgetBps": 125,
-    "targetVideosPerDay": 600,
-    "nominalMinerEmissionRaoPerDay": "2952000000000"
+    "serviceBudgetBps": 500,
+    "targetVideosPerDay": 240,
+    "nominalMinerEmissionRaoPerDay": "2952000000000",
+    "allocationMode": "fixed"
   }
 }

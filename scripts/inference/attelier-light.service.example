@@ -1,0 +1,24 @@
+[Unit]
+Description=Attelier SN126 M0 hourly light validator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=attelier-light
+Group=attelier-light
+StateDirectory=attelier-light
+# Replace names/path only. Provision the native wallet layout for this service
+# user at the path below (directory 0700, native key files 0600); never copy a
+# seed or password into this unit, its environment, or the release.
+ExecStart=/opt/attelier-subnet/current/.venv/bin/attelier-validator --live --wallet REPLACE_WALLET --hotkey REPLACE_HOTKEY --wallet-path /var/lib/attelier-light/wallets
+Restart=on-failure
+RestartSec=30
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/attelier-light
+
+[Install]
+WantedBy=multi-user.target

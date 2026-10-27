@@ -173,6 +173,77 @@ def test_prelaunch_cli_full_target_uses_quantized_weights_owner_burn_and_atomic_
     assert collision.returncode != 0 and "different_artifact" in collision.stderr
 
 
+def test_fixed_launch_budget_survives_low_demand_and_empty_next_window_burns(tmp_path):
+    ledger, policy, registry = inputs(budget=1000, target=240)
+    policy["simulation"]["allocationMode"] = "fixed"
+    # Low initial demand changes the service split, not the configured 10% pool.
+    ledger["aggregates"] = ledger["aggregates"][1:]
+    row = ledger["aggregates"][0]
+    for key in ("attempted", "succeeded", "eligibleSucceeded"):
+        row[key] = 5
+    row["completedVideoMs"] = row["eligibleVideoMs"] = 25_000
+    reseal(ledger, policy)
+    out = tmp_path / "fixed.json"
+    result = run_cli(tmp_path, ledger, policy, registry, "--out", str(out))
+    assert result.returncode == 0, result.stderr
+    artifact = json.loads(out.read_text())
+    assert artifact["service"]["allocationMode"] == "fixed"
+    assert artifact["service"]["eligibleVideos"] == 5
+    assert artifact["unsignedProposedWeights"]["entries"] == [
+        {"kind": "miner", "uid": 4, "hotkey": OTHER, "weight": 6553},
+        {"kind": "burn", "weight": 58982},
+    ]
+    assert artifact["counterfactualServiceAllocation"]["allocatedRao"] == "295200000000"
+    ledger["sequence"] += 1
+    ledger["window"] = {"startMs": 2 * DAY_MS, "endMs": 3 * DAY_MS}
+    ledger["closedAtMs"] = 3 * DAY_MS + 1
+    ledger["aggregates"] = []
+    empty = tmp_path / "empty-next.json"
+    result = run_cli(tmp_path, ledger, policy, registry, "--out", str(empty))
+    assert result.returncode == 0, result.stderr
+    empty_artifact = json.loads(empty.read_text())
+    assert empty_artifact["unsignedProposedWeights"]["entries"] == [
+        {"kind": "burn", "weight": 65535}
+    ]
+    assert empty_artifact["counterfactualServiceAllocation"]["allocatedRao"] == "0"
+    assert empty_artifact["chainCalls"] == []
+
+
+def test_per_job_eligibility_keeps_eligible_completion_below_historic_aggregate_threshold(tmp_path):
+    ledger, policy, registry = inputs(budget=1000, target=240)
+    policy["simulation"]["allocationMode"] = "fixed"
+    row = ledger["aggregates"][1]
+    row.update(
+        attempted=100,
+        succeeded=1,
+        failed=99,
+        completedVideoMs=5000,
+        eligibleSucceeded=1,
+        eligibleVideoMs=5000,
+    )
+    ledger["aggregates"] = [row]
+    reseal(ledger, policy)
+    historic = run_cli(tmp_path, ledger, policy, registry)
+    assert historic.returncode == 0
+    assert json.loads(historic.stdout)["service"]["eligibleVideos"] == 0
+
+    policy["gatewayPolicy"]["rewardEligibility"] = "per_job"
+    reseal(ledger, policy)
+    per_job = run_cli(tmp_path, ledger, policy, registry)
+    assert per_job.returncode == 0
+    artifact = json.loads(per_job.stdout)
+    assert artifact["service"]["eligibleVideos"] == 1
+    assert artifact["unsignedProposedWeights"]["entries"] == [
+        {"kind": "miner", "uid": 4, "hotkey": OTHER, "weight": 6553},
+        {"kind": "burn", "weight": 58982},
+    ]
+
+    policy["gatewayPolicy"]["rewardEligibility"] = "unknown"
+    reseal(ledger, policy)
+    rejected = run_cli(tmp_path, ledger, policy, registry)
+    assert rejected.returncode != 0 and "policy_gateway" in rejected.stderr
+
+
 def test_prelaunch_cli_handles_empty_and_zero_quantized_service_without_fake_payout(tmp_path):
     ledger, policy, registry = inputs([], window_ms=HOUR_MS)
     policy["workers"] = []
@@ -186,9 +257,12 @@ def test_prelaunch_cli_handles_empty_and_zero_quantized_service_without_fake_pay
     assert empty_artifact["unsignedProposedWeights"]["entries"] == [
         {"kind": "burn", "weight": 65535}
     ]
-    assert empty_artifact["assumptions"] == {"dailyUtcWindow": False, "windowMs": HOUR_MS,
-                                               "noYumaConsensusSimulation": True,
-                                               "noTransactionOrSignature": True}
+    assert empty_artifact["assumptions"] == {
+        "dailyUtcWindow": False,
+        "windowMs": HOUR_MS,
+        "noYumaConsensusSimulation": True,
+        "noTransactionOrSignature": True,
+    }
     ledger, policy, registry = inputs(budget=1)
     ledger["aggregates"] = [ledger["aggregates"][1]]
     ledger["aggregates"][0].update(
@@ -267,11 +341,14 @@ def test_prelaunch_cli_hourly_prorates_daily_budget_and_keeps_owner_at_zero(tmp_
     assert fleet_artifact["service"]["effectiveServiceBudgetNumerator"] == 2500
     assert fleet_artifact["service"]["effectiveServiceBudgetDenominator"] == 1
     assert fleet_artifact["counterfactualServiceAllocation"]["allocatedRao"] == "738000000000"
-    assert sum(
-        entry["weight"]
-        for entry in fleet_artifact["unsignedProposedWeights"]["entries"]
-        if entry["kind"] == "miner"
-    ) == 16383
+    assert (
+        sum(
+            entry["weight"]
+            for entry in fleet_artifact["unsignedProposedWeights"]["entries"]
+            if entry["kind"] == "miner"
+        )
+        == 16383
+    )
 
 
 def test_prelaunch_cli_has_no_wallet_or_publishing_arguments_and_rejects_bad_uid(tmp_path):
@@ -343,7 +420,11 @@ def run_registry_cli(tmp_path, config, snapshot, *extra):
     config_path, snapshot_path = tmp_path / "config.json", tmp_path / "snapshot.json"
     config_path.write_text(json.dumps(config))
     snapshot_path.write_text(json.dumps(snapshot))
-    out, simulation = tmp_path / "registry.json", tmp_path / "simulation-registry.json"
+    out, simulation, dashboard = (
+        tmp_path / "registry.json",
+        tmp_path / "simulation-registry.json",
+        tmp_path / "dashboard-chain.json",
+    )
     command = [
         sys.executable,
         "scripts/inference/registry.py",
@@ -355,6 +436,8 @@ def run_registry_cli(tmp_path, config, snapshot, *extra):
         str(out),
         "--simulation-registry-out",
         str(simulation),
+        "--dashboard-chain-out",
+        str(dashboard),
         *extra,
     ]
     result = subprocess.run(
@@ -364,12 +447,13 @@ def run_registry_cli(tmp_path, config, snapshot, *extra):
         capture_output=True,
         text=True,
     )
-    return result, out, simulation
+    return result, out, simulation, dashboard
 
 
 def test_prelaunch_registry_cli_projects_finalized_fixture_and_simulation_registry(tmp_path):
     config, snapshot = registry_inputs()
-    result, out, simulation = run_registry_cli(tmp_path, config, snapshot)
+    config["requireFrozenLightWindow"] = True
+    result, out, simulation, dashboard = run_registry_cli(tmp_path, config, snapshot)
     assert result.returncode == 0
     registry = json.loads(out.read_text())
     assert registry == {
@@ -394,13 +478,30 @@ def test_prelaunch_registry_cli_projects_finalized_fixture_and_simulation_regist
     projected = json.loads(simulation.read_text())
     assert projected["subnetOwnerColdkey"] == OWNER_COLDKEY
     assert projected["miners"] == [{"uid": 3, "hotkey": OWNER_HOTKEY, "coldkey": OWNER_COLDKEY}]
+    assert json.loads(dashboard.read_text()) == {
+        "network": "finney",
+        "netuid": 126,
+        "mechanism": 0,
+        "observedAt": "2026-10-26T12:00:00Z",
+        "block": 9367342,
+        "hash": "0x" + "b" * 64,
+        "runtime": None,
+        "mechanismCount": 1,
+        "weightsStatus": "not_observed",
+        "weightsBlock": None,
+        "observedSplit": {"optimization": None, "inference": None, "block": 9367342},
+    }
+
+    config["requireFrozenLightWindow"] = "true"
+    result, _, _, _ = run_registry_cli(tmp_path, config, snapshot)
+    assert result.returncode != 0 and "prelaunch_config" in result.stderr
 
 
 def test_prelaunch_registry_cli_fails_closed_for_expired_or_wrong_finalized_snapshot(tmp_path):
     config, snapshot = registry_inputs(reviewed_expires=1)
-    result, _, _ = run_registry_cli(tmp_path, config, snapshot)
+    result, _, _, _ = run_registry_cli(tmp_path, config, snapshot)
     assert result.returncode != 0 and "operator_review_expired" in result.stderr
     config, snapshot = registry_inputs()
     snapshot["genesis"] = "0x" + "a" * 64
-    result, _, _ = run_registry_cli(tmp_path, config, snapshot)
+    result, _, _, _ = run_registry_cli(tmp_path, config, snapshot)
     assert result.returncode != 0 and "registry_snapshot_namespace" in result.stderr
