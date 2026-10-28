@@ -1,4 +1,4 @@
-"""Authenticated SN126 light review runner; shadow by default, live only when explicit."""
+"""SN126 light validator; publishes weights by default, --dry-run simulates only."""
 
 from __future__ import annotations
 
@@ -18,10 +18,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from typing import Any
 
-from forge.inference.light_registry import RegistryError, verify_finalized_registry
+from forge.inference.light_registry import ARCHIVE_URL, RegistryError, verify_finalized_registry
 from forge.inference.prelaunch import DAY_MS, GENESIS, HOUR_MS, canonical, digest, simulate
 
 DEFAULT_URL = "https://inference.attelier.ai/v1/subnet/126/light/latest"
@@ -264,14 +265,6 @@ def _atomic_write(path: Path, value: dict[str, Any]) -> None:
         raise LightError("light_artifact_write") from error
 
 
-def outage_blocks_service(body: dict[str, Any], outage: dict[str, Any]) -> bool:
-    """A conservative burn is final for the closed hour that selected it."""
-    burned = outage.get("burnedThroughEndMs")
-    ledger = body.get("ledger")
-    window = ledger.get("window") if isinstance(ledger, dict) else None
-    return type(burned) is int and isinstance(window, dict) and window.get("endMs") <= burned
-
-
 class LightRunner:
     """Stateful processor that only produces the existing unsigned simulation."""
 
@@ -294,9 +287,9 @@ class LightRunner:
         state_dir.mkdir(parents=True, exist_ok=True)
         self._lock = None
         if writer_lock:
-            # SQLite serializes transactions in one directory.  This lock makes
-            # productive writer ownership explicit; unsigned review remains
-            # safe to run concurrently because it cannot sign or submit.
+            # Own this state directory for the process lifetime. The CLI also
+            # takes this lock in dry-run so its review cannot advance a live
+            # writer's accepted-feed state.
             self._lock = (state_dir / "light.lock").open("a+", encoding="utf8")
             try:
                 fcntl.flock(self._lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -420,6 +413,27 @@ def default_public_key() -> str:
         raise LightError("light_defaults") from error
 
 
+def _network(value: str) -> str:
+    if value == "finney":
+        return value
+    try:
+        parsed = urllib.parse.urlparse(value)
+        valid = (
+            value.startswith(("ws://", "wss://"))
+            and bool(parsed.hostname)
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.fragment
+            and not any(character.isspace() for character in value)
+        )
+        # Accessing port also rejects malformed or out-of-range ports.
+        if valid and (parsed.port is None or parsed.port > 0):
+            return value
+    except ValueError:
+        pass
+    raise argparse.ArgumentTypeError("use finney or an absolute ws:// or wss:// Finney RPC URL")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state-dir", type=Path, default=Path("/var/lib/attelier-light"))
@@ -427,16 +441,41 @@ def main() -> None:
     parser.add_argument("--interval-seconds", type=int, default=60)
     parser.add_argument("--once", action="store_true")
     parser.add_argument(
-        "--live", action="store_true", help="Enable the hourly Finney SN126 M0 writer"
+        "--network",
+        "--subtensor-endpoint",
+        type=_network,
+        default="finney",
+        metavar="FINNEY_OR_WS_URL",
+        help="Finney (default) or a custom WebSocket RPC used for all chain reads and publication",
+    )
+    # Existing service commands may still pass --live. Publication is now the
+    # default; --dry-run always opts out, including with the old flag present.
+    parser.add_argument("--live", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Simulate only: do not load a wallet or publish weights",
     )
     parser.add_argument(
-        "--dry-run", action="store_true", help="Validate a live feed and record its vector only"
+        "--wallet.name",
+        "--wallet",
+        dest="wallet",
+        metavar="NAME",
+        help="Bittensor wallet name; required unless --dry-run",
     )
-    parser.add_argument("--wallet", help="Explicit Bittensor wallet name; required with --live")
-    parser.add_argument("--hotkey", help="Explicit Bittensor hotkey name; required with --live")
     parser.add_argument(
+        "--wallet.hotkey",
+        "--hotkey",
+        dest="hotkey",
+        metavar="NAME",
+        help="Bittensor hotkey name; required unless --dry-run",
+    )
+    parser.add_argument(
+        "--wallet.path",
         "--wallet-path",
-        help="Existing Bittensor wallet directory; required by non-default wallet layouts",
+        dest="wallet_path",
+        metavar="PATH",
+        help="Optional wallet directory (default: ~/.bittensor/wallets)",
     )
     parser.add_argument("--allow-http-fixture", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -444,22 +483,27 @@ def main() -> None:
         parser.error("--interval-seconds must be positive")
     if args.allow_http_fixture and os.environ.get("PYTEST_CURRENT_TEST") is None:
         parser.error("--allow-http-fixture is restricted to an explicit test fixture")
-    if args.dry_run and not args.live:
-        parser.error("--dry-run requires --live")
-    if args.live and not args.dry_run and (not args.wallet or not args.hotkey):
-        parser.error("--live requires explicit --wallet and --hotkey")
+    if not args.dry_run and (not args.wallet or not args.hotkey):
+        parser.error("--wallet.name and --wallet.hotkey are required unless --dry-run")
     try:
-        # A fresh signed live feed is also valid unsigned review input. Only
-        # --live takes the writer lock and constructs wallet/chain boundaries.
+        # Dry-run must not advance a running writer's local state. Each CLI
+        # process owns its state directory; only publication loads a wallet.
         runner = LightRunner(
-            args.state_dir, default_public_key(), allow_live=True, writer_lock=args.live
+            args.state_dir,
+            default_public_key(),
+            allow_live=True,
+            writer_lock=True,
+            registry_verifier=partial(
+                verify_finalized_registry,
+                network=ARCHIVE_URL if args.network == "finney" else args.network,
+            ),
         )
     except (LightError, OSError, sqlite3.Error, ValueError) as error:
         reason = str(error) if isinstance(error, LightError) else "light_unavailable"
         print(reason, flush=True)
         raise SystemExit(1) from error
     publisher = None
-    if args.live and not args.dry_run:
+    if not args.dry_run:
         try:
             import bittensor as bt
 
@@ -469,9 +513,13 @@ def main() -> None:
             wallet = bt.Wallet(
                 name=args.wallet,
                 hotkey=args.hotkey,
-                path=args.wallet_path or str(Path.home() / ".bittensor" / "wallets"),
+                path=str(Path(args.wallet_path).expanduser())
+                if args.wallet_path
+                else str(Path.home() / ".bittensor" / "wallets"),
             )
-            chain = BittensorChain("finney", 126)
+            chain = BittensorChain(
+                "finney", 126, endpoint=None if args.network == "finney" else args.network
+            )
             publisher = LivePublisher(
                 LiveJournal(args.state_dir / "light.sqlite3"),
                 SdkM0Publisher(
@@ -495,8 +543,10 @@ def main() -> None:
     while True:
         try:
             raw = fetch_feed(args.url, allow_http_fixture=args.allow_http_fixture)
+            body = verify_feed(raw, default_public_key(), allow_live=True)
+            if not args.dry_run and body["mode"] != "live":
+                raise LightError("light_live_feed_required")
             artifact = runner.process(raw)
-            body = verify_feed(raw, default_public_key(), allow_live=True) if args.live else None
         except (LightError, OSError, RuntimeError, sqlite3.Error, ValueError) as error:
             reason = str(error) if isinstance(error, LightError) else "light_unavailable"
             runner.unavailable(reason)
@@ -505,7 +555,7 @@ def main() -> None:
             # outage clock. A live SDK rate-limit or RPC issue is not a missing
             # closed feed and must never select a burn vector.
             now_ms = int(time.time() * 1000)
-            if args.live and not args.dry_run:
+            if not args.dry_run:
                 if missing is None:
                     missing = now_ms
                     _atomic_write(
@@ -540,37 +590,44 @@ def main() -> None:
                 raise SystemExit(1) from error
         else:
             missing = None
-            if args.live and not args.dry_run:
+            if not args.dry_run:
                 outage_state = {
                     "schema": "attelier/light-feed-missing/v1",
                     "missingSinceMs": None,
                     "burnedThroughEndMs": outage_state.get("burnedThroughEndMs"),
                 }
                 _atomic_write(missing_path, outage_state)
-            if args.live:
-                try:
-                    assert body is not None
-                    if args.dry_run:
-                        from forge.inference.light_publication import (
-                            eligible_workers,
-                            relative_vector,
-                        )
+            try:
+                if args.dry_run:
+                    from forge.inference.light_publication import (
+                        eligible_workers,
+                        relative_vector,
+                    )
 
-                        _atomic_write(
-                            args.state_dir / "live-dry-run.json",
-                            {
-                                "bodyDigest": digest(body),
-                                "relativeWeights": relative_vector(eligible_workers(artifact)),
-                            },
-                        )
-                    elif not outage_blocks_service(body, outage_state):
-                        assert publisher is not None
-                        publisher.process(body, artifact)
-                except (OSError, RuntimeError, sqlite3.Error, ValueError) as error:
-                    runner.unavailable("light_publication_unavailable")
-                    print("light_publication_unavailable", flush=True)
-                    if args.once:
-                        raise SystemExit(1) from error
+                    _atomic_write(
+                        args.state_dir / "live-dry-run.json",
+                        {
+                            "bodyDigest": digest(body),
+                            "relativeWeights": [
+                                [uid, weight]
+                                for uid, weight in sorted(
+                                    relative_vector(eligible_workers(artifact)).items()
+                                )
+                            ],
+                        },
+                    )
+                else:
+                    # A fallback burn marks a missing/invalid feed, not an
+                    # irrevocable verdict on a later authenticated receipt for
+                    # that hour. This fresh W+1 publication is prospective;
+                    # it never compensates the outage or rewrites the burn.
+                    assert publisher is not None
+                    publisher.process(body, artifact)
+            except (OSError, RuntimeError, sqlite3.Error, ValueError) as error:
+                runner.unavailable("light_publication_unavailable")
+                print("light_publication_unavailable", flush=True)
+                if args.once:
+                    raise SystemExit(1) from error
         if args.once:
             return
         time.sleep(args.interval_seconds)

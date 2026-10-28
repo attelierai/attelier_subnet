@@ -21,7 +21,10 @@ def _value(value: Any) -> Any:
 
 
 def verify_finalized_registry(
-    registry: dict[str, Any], *, chain_factory: Callable[[str, int], Any] = BittensorChain
+    registry: dict[str, Any],
+    *,
+    network: str = ARCHIVE_URL,
+    chain_factory: Callable[[str, int], Any] = BittensorChain,
 ) -> None:
     """Match hash, identities, owner and mechanism against one final block.
 
@@ -36,9 +39,9 @@ def verify_finalized_registry(
         raise RegistryError("light_registry_schema")
     chain = None
     try:
-        # A daily window refers to a block at least one day old. A pruned
-        # head-only endpoint cannot establish its historical identity set.
-        chain = chain_factory(ARCHIVE_URL, 126)
+        # The selected node must retain the signed registry block's state;
+        # a head-only endpoint cannot establish historical identities.
+        chain = chain_factory(network, 126)
         if block > chain.finalized_height():
             raise RegistryError("light_registry_not_finalized")
         actual_hash = chain.finalized_block_hash(block).removeprefix("0x")

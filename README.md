@@ -2,7 +2,7 @@
   <a href="https://attelier.ai"><img src="assets/attelier-banner.jpg" alt="Attelier" width="100%" /></a>
 </p>
 
-# Attelier Subnet · Inference prelaunch
+# Attelier Subnet · Inference
 
 <p align="center">
   <a href="https://attelier.ai">Website</a> ·
@@ -11,18 +11,22 @@
   <a href="https://x.com/attelier_ai">X</a>
 </p>
 
-SN126 mechanism 0 is a permissioned H3 Gateway shadow prelaunch. The default
-CPU validator runs as `.venv/bin/attelier-validator`, using release-pinned
-public defaults; it needs no wallet or operator public-key configuration. It
-checks the signed gateway feed and finalized public registry, then produces an
-unsigned local simulation artifact.
+SN126 mechanism 0 serves H3 through a permissioned gateway. The default CPU
+validator is **light**: it verifies the signed gateway feed and finalized
+registry, calculates the weight vector, and **publishes weights by default**.
+The gateway, public verification key and network policy ship with the release.
 
-The default state is **simulated prelaunch**: actual chain publication is not
-confirmed. Default operation is shadow/read-only and its artifact is
-`simulationOnly`, non-publishable, and performs no chain writes. The release
-also contains an explicit, wallet-gated `--live` M0 commit-reveal path; its
-availability does not mean that a commit, reveal, or finalized weight readback
-has happened.
+```bash
+.venv/bin/attelier-validator --wallet.name NAME --wallet.hotkey NAME
+```
+
+Wallets default to `~/.bittensor/wallets`; `--wallet.path` is optional.
+`--wallet` and `--hotkey` remain aliases. To simulate without loading a wallet
+or sending weights, run `attelier-validator --dry-run` with a separate
+`--state-dir`. Existing simulation services must add `--dry-run` when upgrading;
+`--live` remains accepted but is no longer required. See the
+[validator guide](docs/validator.md) for installation and custom RPCs.
+Publication is confirmed only after commit, reveal and finalized readback.
 The current live-policy contract uses indefinite one-hour UTC windows. Eligible
 work completed in window W determines accounting for W+1; pending work belongs
 to the window in which it becomes terminal.

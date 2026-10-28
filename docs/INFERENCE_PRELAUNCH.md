@@ -1,11 +1,12 @@
 # Inference prelaunch contract
 
-The default SN126 mechanism-0 path is a permissioned, unsigned simulation. It
-reads a closed service ledger and a finalized registry projection, then emits a
-review artifact. Explicit `--live` is a separately wallet-gated M0
-commit-reveal path; it journals the exact encrypted call before submit and
+The SN126 mechanism-0 light validator publishes weights by default using the
+wallet named by `--wallet.name` and `--wallet.hotkey`. It reads a closed service
+ledger and a finalized registry projection, calculates the vector, and journals
+the exact encrypted M0 commit-reveal call before submit. Publication
 requires finalized inclusion plus a reveal/weight readback before success can
-be claimed. No current publication is implied by this capability.
+be claimed. `--dry-run` selects unsigned simulation without a wallet or chain
+writes. Old `--live` commands remain valid, but that flag is no longer needed.
 
 ## Window and eligibility
 
@@ -34,8 +35,8 @@ allocation, and expected payout. The current live share is fixed at 500 bps
 feed is available after the 10-minute grace, that window is also burn, and the
 next valid window resumes without retroactive accounting. An owner-associated
 shadow row has zero expected mining payout. Historical 10% shadow artifacts are
-kept only for reproducible replay. These values are simulation accounting, not a
-chain instruction.
+kept only for reproducible replay. Simulation artifacts themselves are unsigned;
+the live publisher separately validates and submits the calculated vector.
 
 ## Registry projection
 
@@ -65,7 +66,8 @@ byte-identical retry, so a changed input cannot overwrite an existing receipt.
 
 The light runner fetches only the reviewed signed endpoint, verifies the pinned
 public signature and its finalized registry readback, and persists its local
-review state. Default mode remains shadow/read-only. Explicit `--live` requires
-wallet/hotkey arguments and independently checks Finney/SN126/M0, CRv4,
+review state. Default publication requires wallet/hotkey names and independently
+checks Finney/SN126/M0, CRv4,
 validator permit, burn UID0 owner identity and `RecycleOrBurn=Burn` before the
-SDK may compose a weight commit.
+SDK may compose a weight commit. `--dry-run` keeps all reads and accounting but
+never loads a wallet or submits a transaction.

@@ -175,14 +175,22 @@ class WeightSubmission:
 class BittensorChain:
     """Thin wrapper over the SDK. Every read that matters is pinned to a block."""
 
-    def __init__(self, network: str, netuid: int):
+    def __init__(self, network: str, netuid: int, *, endpoint: str | None = None):
         try:
             import bittensor as bt
         except ModuleNotFoundError as error:
             raise RuntimeError("Bittensor SDK is required for chain access") from error
         self.network = network
         self.netuid = netuid
-        self.subtensor = bt.Subtensor(network=network)
+        # The SDK accepts a WebSocket URL in its network argument. Keep our
+        # protocol identity independent of that connection choice.
+        rpc = endpoint if endpoint is not None else network
+        if rpc.startswith(("ws://", "wss://")):
+            # Pin explicit RPCs: the SDK otherwise adds public fallback and
+            # archive pools when a URL maps to one of its known networks.
+            self.subtensor = bt.Subtensor(network=rpc, fallback_endpoints=[], archive_endpoints=[])
+        else:
+            self.subtensor = bt.Subtensor(network=rpc)
 
     def close(self) -> None:
         self.subtensor.close()

@@ -16,6 +16,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 
 from forge.inference.prelaunch import GENESIS, canonical, digest
 
@@ -30,6 +31,36 @@ BURN_OWNER_COLDKEY = "5DqrUa2z6E9taJdY8FGiPCrtCswsEjHjPbVo5xcTw2GqvKZm"
 
 class PublicationError(ValueError):
     """A live guard failed; caller must retain the window and not retry blindly."""
+
+
+def _intent_network(value: Any) -> str:
+    """Read Finney intents and existing RPC-patched journals.
+
+    Some installations patched ``NETWORK`` to their websocket URL. That
+    URL was never a chain identity, but it is part of already durable intent
+    bytes, so it remains readable solely for reconciliation.  New intents are
+    always domain-separated as Finney.
+    """
+
+    if value == NETWORK:
+        return NETWORK
+    if not isinstance(value, str):
+        raise PublicationError("light_live_journal_intent")
+    try:
+        parsed = urlsplit(value)
+        _ = parsed.port
+    except ValueError as error:
+        raise PublicationError("light_live_journal_intent") from error
+    if (
+        parsed.scheme not in {"ws", "wss"}
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise PublicationError("light_live_journal_intent")
+    return value
 
 
 def _chain_bytes(value: Any) -> bytes:
@@ -94,11 +125,12 @@ class LiveIntent:
     registry_hash: str
     weights: dict[int, int]
     targets: dict[int, tuple[str, str]]
+    network: str = NETWORK
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "schema": "attelier/light-live-intent/v1",
-            "network": NETWORK,
+            "network": self.network,
             "netuid": NETUID,
             "mechanism": MECHANISM,
             "sequence": self.sequence,
@@ -119,6 +151,25 @@ class LiveIntent:
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> LiveIntent:
         try:
+            if (
+                set(value)
+                != {
+                    "schema",
+                    "network",
+                    "netuid",
+                    "mechanism",
+                    "sequence",
+                    "feedDigest",
+                    "window",
+                    "registryHash",
+                    "relativeWeights",
+                    "targets",
+                }
+                or value["schema"] != "attelier/light-live-intent/v1"
+                or value["netuid"] != NETUID
+                or value["mechanism"] != MECHANISM
+            ):
+                raise PublicationError("light_live_journal_intent")
             targets = {
                 int(uid): (str(hotkey), str(coldkey)) for uid, hotkey, coldkey in value["targets"]
             }
@@ -130,9 +181,23 @@ class LiveIntent:
                 registry_hash=str(value["registryHash"]),
                 weights=weights,
                 targets=targets,
+                network=_intent_network(value["network"]),
             )
         except (KeyError, TypeError, ValueError) as error:
             raise PublicationError("light_live_journal_intent") from error
+
+
+def _same_intent_except_legacy_transport(stored: LiveIntent, current: LiveIntent) -> bool:
+    """Only a legacy websocket transport label may differ in the same intent."""
+
+    stored_body, current_body = stored.as_dict(), current.as_dict()
+    stored_body.pop("network")
+    current_body.pop("network")
+    return canonical(stored_body) == canonical(current_body) and (
+        stored.network == current.network
+        or stored.network != NETWORK
+        and current.network == NETWORK
+    )
 
 
 class Publisher(Protocol):
@@ -159,6 +224,10 @@ class LiveJournal:
         return sqlite3.connect(self.path, timeout=30, isolation_level=None)
 
     def prepare(self, intent: LiveIntent) -> dict[str, Any]:
+        # Legacy transport labels are readable only from an existing durable
+        # row. No new publication may ever write one again.
+        if intent.network != NETWORK:
+            raise PublicationError("light_live_journal_intent")
         encoded = canonical(intent.as_dict()).decode("ascii")
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -169,11 +238,25 @@ class LiveJournal:
             # A restart must be able to recover its own durable SUBMITTING
             # receipt. Only a *different* unresolved window blocks this one.
             if row is not None:
-                if row[0] != encoded:
+                try:
+                    persisted_intent = LiveIntent.from_dict(json.loads(row[0]))
+                except (TypeError, json.JSONDecodeError, PublicationError) as error:
+                    db.execute("ROLLBACK")
+                    raise PublicationError("light_live_journal_intent") from error
+                if canonical(persisted_intent.as_dict()).decode("ascii") != row[0]:
+                    db.execute("ROLLBACK")
+                    raise PublicationError("light_live_journal_intent")
+                if not _same_intent_except_legacy_transport(persisted_intent, intent):
                     db.execute("ROLLBACK")
                     raise PublicationError("light_live_sequence_conflict")
                 db.execute("COMMIT")
-                return {"status": row[1], "receipt": json.loads(row[2]) if row[2] else None}
+                return {
+                    "status": row[1],
+                    "receipt": json.loads(row[2]) if row[2] else None,
+                    # Keep the old canonical bytes for every reconciliation
+                    # update.  This is compatibility, never a journal rewrite.
+                    "intent": persisted_intent,
+                }
             unresolved = db.execute(
                 "SELECT sequence, intent, status, receipt FROM live_intent WHERE status IN "
                 "('SUBMITTING','UNKNOWN_AFTER_SUBMIT') ORDER BY sequence LIMIT 1"
@@ -192,7 +275,7 @@ class LiveJournal:
                 (intent.sequence, encoded, int(time.time())),
             )
             db.execute("COMMIT")
-        return {"status": "PREPARED", "receipt": None}
+        return {"status": "PREPARED", "receipt": None, "intent": intent}
 
     def update(self, intent: LiveIntent, status: str, receipt: dict[str, Any] | None) -> None:
         with self._connect() as db:
@@ -272,6 +355,10 @@ class LivePublisher:
             if receipt["status"] in {"SUBMITTING", "UNKNOWN_AFTER_SUBMIT"}:
                 raise PublicationError("light_live_unreconciled_submission")
             current = self.journal.prepare(intent)
+        # A matching existing row can retain the legacy websocket label. From
+        # this point every guard, durable update and reconciliation must use its
+        # exact intent bytes; only a newly prepared row carries Finney.
+        intent = current.get("intent", intent)
         if current["status"] in {"SUBMITTING", "UNKNOWN_AFTER_SUBMIT"}:
             receipt = self.publisher.reconcile(intent, current["receipt"] or {})
             self.journal.update(intent, receipt["status"], receipt)
@@ -283,7 +370,7 @@ class LivePublisher:
             self.journal.update(intent, receipt["status"], receipt)
             return {"intent": intent.as_dict(), "status": receipt["status"], "receipt": receipt}
         if current["status"] == "REVEALED":
-            return {"intent": intent.as_dict(), **current}
+            return {**current, "intent": intent.as_dict()}
         guard = self.publisher.guard(intent)
         prepared = None
         persisted: dict[str, Any] | None = None

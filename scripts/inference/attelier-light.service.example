@@ -11,7 +11,8 @@ StateDirectory=attelier-light
 # Replace names/path only. Provision the native wallet layout for this service
 # user at the path below (directory 0700, native key files 0600); never copy a
 # seed or password into this unit, its environment, or the release.
-ExecStart=/opt/attelier-subnet/current/.venv/bin/attelier-validator --live --wallet REPLACE_WALLET --hotkey REPLACE_HOTKEY --wallet-path /var/lib/attelier-light/wallets
+# For a custom Finney RPC, append --network wss://subtensor.example.com:9944.
+ExecStart=/opt/attelier-subnet/current/.venv/bin/attelier-validator --wallet.name REPLACE_WALLET --wallet.hotkey REPLACE_HOTKEY --wallet.path /var/lib/attelier-light/wallets
 Restart=on-failure
 RestartSec=30
 NoNewPrivileges=yes

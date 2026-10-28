@@ -2,24 +2,30 @@ import base64
 import hashlib
 import http.server
 import json
+import os
+import shutil
+import sqlite3
 import subprocess
 import sys
 import threading
+import time
 import types
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 
+from forge.chain import BittensorChain
 from forge.inference.light import (
     DOMAIN,
     LightError,
     LightRunner,
     fetch_feed,
-    outage_blocks_service,
     verify_feed,
 )
 from forge.inference.light_publication import (
+    LiveIntent,
     LiveJournal,
     LivePublisher,
     PublicationError,
@@ -198,6 +204,32 @@ def _server(payload):
         thread.join()
 
 
+@contextmanager
+def _counting_server(payload, requests):
+    """A fixture endpoint which proves CLI argument failures did not fetch."""
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            requests.append(self.path)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *_):
+            return
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}/fixture"
+    finally:
+        server.shutdown()
+        thread.join()
+
+
 def test_light_runner_verifies_real_http_signature_registry_sqlite_and_artifact(tmp_path):
     private, public = _keypair(tmp_path)
     payload = _feed(tmp_path, private)
@@ -288,19 +320,20 @@ def test_registry_fixture_checks_finality_owner_mechanism_and_identities(monkeyp
             return "genesis"
 
     class FakeChain:
-        def __init__(self, height=1):
+        def __init__(self, height=1, genesis=GENESIS, block_hash="0x" + "b" * 64):
             self.height = height
             self.subtensor = types.SimpleNamespace(
                 _client=types.SimpleNamespace(_substrate=types.SimpleNamespace(raw=Raw())),
-                _call=lambda _: GENESIS,
+                _call=lambda _: genesis,
                 at=lambda _: At(),
             )
+            self.block_hash = block_hash
 
         def finalized_height(self):
             return self.height
 
         def finalized_block_hash(self, _block):
-            return "0x" + "b" * 64
+            return self.block_hash
 
         def owner_snapshot(self, _block):
             return {3: (MINER_A, MINER_A), 4: (MINER_B, MINER_B)}
@@ -317,6 +350,618 @@ def test_registry_fixture_checks_finality_owner_mechanism_and_identities(monkeyp
     verify_finalized_registry(registry, chain_factory=lambda *_: FakeChain())
     with pytest.raises(RegistryError, match="light_registry_not_finalized"):
         verify_finalized_registry(registry, chain_factory=lambda *_: FakeChain(height=0))
+    observed = []
+
+    def custom_factory(network, netuid):
+        observed.append((network, netuid))
+        return FakeChain()
+
+    endpoint = "wss://subtensor.example:443"
+    verify_finalized_registry(registry, network=endpoint, chain_factory=custom_factory)
+    assert observed == [(endpoint, 126)]
+    with pytest.raises(RegistryError, match="light_registry_genesis"):
+        verify_finalized_registry(
+            registry, network=endpoint, chain_factory=lambda *_: FakeChain(genesis="0xwrong")
+        )
+    with pytest.raises(RegistryError, match="light_registry_block_hash"):
+        verify_finalized_registry(
+            registry, network=endpoint, chain_factory=lambda *_: FakeChain(block_hash="0xwrong")
+        )
+
+
+def test_custom_subtensor_transport_keeps_finney_publisher_identity_and_rejects_bad_genesis(
+    monkeypatch,
+):
+    """The SDK sees the custom URL while the publication guard still sees Finney."""
+
+    class Item:
+        def __init__(self, name):
+            self.name = name
+
+    class Value:
+        def __init__(self, value):
+            self.value = value
+
+    genesis = [GENESIS]
+    endpoint_calls = []
+
+    class Raw:
+        def get_chain_finalised_head(self):
+            return "finalized"
+
+        def get_block_number(self, _hash):
+            return 12
+
+        def get_block_hash(self, height):
+            return "genesis" if height == 0 else "0xblock12"
+
+        def query(self, module, item, args, block_hash):
+            assert (module, item, args, block_hash) == (
+                "SubtensorModule",
+                "SubnetEpochConsensus",
+                [126],
+                "0xblock12",
+            )
+            return "Yuma"
+
+    hotkeys = (
+        ["burn-hotkey", "unused", "unused", "unused", MINER_A] + ["unused"] * 69 + ["validator"]
+    )
+    coldkeys = (
+        [OWNER, "unused", "unused", "unused", "miner-cold"] + ["unused"] * 69 + ["validator-cold"]
+    )
+
+    class At:
+        def query(self, item, _args=None):
+            values = {
+                "SubnetOwner": OWNER,
+                "MechanismCountCurrent": 1,
+                "CommitRevealWeightsEnabled": True,
+                "WeightsSetRateLimit": 100,
+                "Tempo": 360,
+                "CommitRevealWeightsVersion": 4,
+                "WeightsVersionKey": 0,
+                "MaxWeightsLimit": 65_535,
+                "RecycleOrBurn": "Burn",
+                "Owner": OWNER,
+            }
+            return Value(values[item.name])
+
+        def read(self, name, **_kwargs):
+            if name == "metagraph":
+                return {
+                    "hotkeys": hotkeys,
+                    "coldkeys": coldkeys,
+                    "validator_permit": [False] * 74 + [True],
+                }
+            raise AssertionError(name)
+
+    class Subtensor:
+        def __init__(self, *, network, fallback_endpoints=None, archive_endpoints=None):
+            endpoint_calls.append(
+                {
+                    "network": network,
+                    "fallback_endpoints": fallback_endpoints,
+                    "archive_endpoints": archive_endpoints,
+                }
+            )
+            self.block = 12
+            self._client = types.SimpleNamespace(_substrate=types.SimpleNamespace(raw=Raw()))
+
+        def _call(self, value):
+            return genesis[0] if value == "genesis" else value
+
+        def at(self, _height):
+            return At()
+
+        def read(self, name, **_kwargs):
+            if name == "block_info":
+                return {"hash": "0xblock12"}
+            raise AssertionError(name)
+
+        def close(self):
+            return None
+
+    storage = types.SimpleNamespace(
+        SubtensorModule=types.SimpleNamespace(
+            **{
+                name: Item(name)
+                for name in (
+                    "SubnetOwner",
+                    "MechanismCountCurrent",
+                    "CommitRevealWeightsEnabled",
+                    "WeightsSetRateLimit",
+                    "Tempo",
+                    "CommitRevealWeightsVersion",
+                    "WeightsVersionKey",
+                    "MaxWeightsLimit",
+                    "RecycleOrBurn",
+                    "Owner",
+                )
+            }
+        )
+    )
+    monkeypatch.setitem(
+        sys.modules, "bittensor", types.SimpleNamespace(Subtensor=Subtensor, storage=storage)
+    )
+    endpoint = "ws://subtensor.example.com:9944"
+    chain = BittensorChain("finney", 126, endpoint=endpoint)
+    assert (chain.network, chain.netuid) == ("finney", 126)
+    assert endpoint_calls == [
+        {"network": endpoint, "fallback_endpoints": [], "archive_endpoints": []}
+    ]
+    intent = LiveIntent(
+        1,
+        "digest",
+        {"startMs": 0, "endMs": 3_600_000},
+        "registry",
+        {0: 95, 4: 5},
+        {0: ("", OWNER), 4: (MINER_A, "miner-cold")},
+    )
+    publisher = SdkM0Publisher(chain, object(), "validator")
+    assert publisher.guard(intent)["validatorUid"] == 74
+    genesis[0] = "0xwrong"
+    with pytest.raises(PublicationError, match="light_live_genesis"):
+        publisher.guard(intent)
+
+
+def test_light_cli_custom_network_and_alias_reach_registry_through_pinned_sdk(tmp_path):
+    """Dry-run exercises CLI parsing, real registry verification and the SDK boundary."""
+
+    private, public = _keypair(tmp_path)
+    envelope = json.loads(_feed(tmp_path, private))
+    body = envelope["body"]
+    now = int(time.time() * 1000)
+    window_end = now // 3_600_000 * 3_600_000
+    body["mode"] = "live"
+    body["policy"]["windowMs"] = 3_600_000
+    body["policy"]["simulation"]["serviceBudgetBps"] = 500
+    body["ledger"]["window"] = {"startMs": window_end - 3_600_000, "endMs": window_end}
+    body["ledger"]["closedAtMs"] = window_end
+    body["issuedAtMs"] = window_end
+    body["expiresAtMs"] = window_end + 3_600_000
+    body["ledger"]["policyHash"] = digest(body["policy"])
+    message = tmp_path / "cli-live-message"
+    message.write_bytes(DOMAIN + canonical(body))
+    envelope["digest"] = digest(body)
+    envelope["signature"] = base64.b64encode(
+        subprocess.run(
+            ["openssl", "pkeyutl", "-sign", "-inkey", str(private), "-rawin", "-in", str(message)],
+            check=True,
+            capture_output=True,
+        ).stdout
+    ).decode("ascii")
+
+    runtime = tmp_path / "runtime"
+    shutil.copytree(Path(__file__).parents[2] / "src" / "forge", runtime / "forge")
+    (runtime / "forge" / "inference" / "defaults.json").write_text(
+        json.dumps({"lightPublicKey": public}), encoding="ascii"
+    )
+    transport_log = tmp_path / "transport.jsonl"
+    (runtime / "bittensor.py").write_text(
+        f"""import json, os
+from types import SimpleNamespace
+
+OWNER = {OWNER!r}
+GENESIS = {GENESIS!r}
+MINER_A = {MINER_A!r}
+MINER_B = {MINER_B!r}
+
+class _Raw:
+    def get_chain_finalised_head(self): return 'finalized'
+    def get_block_number(self, _): return 1
+    def get_block_hash(self, _): return 'genesis'
+
+class _At:
+    def query(self, item, _): return {{'SubnetOwner': OWNER, 'MechanismCountCurrent': 1}}[item]
+    def read(self, name, **_):
+        assert name == 'metagraph'
+        return {{
+            'hotkeys': ['unused', 'unused', 'unused', MINER_A, MINER_B],
+            'coldkeys': ['unused', 'unused', 'unused', MINER_A, MINER_B],
+        }}
+
+class Subtensor:
+    def __init__(self, *, network, fallback_endpoints=None, archive_endpoints=None):
+        with open(os.environ['ATELIER_TEST_TRANSPORT_LOG'], 'a', encoding='ascii') as out:
+            out.write(json.dumps([network, fallback_endpoints, archive_endpoints]) + '\\n')
+        self.block = 1
+        self._client = SimpleNamespace(_substrate=SimpleNamespace(raw=_Raw()))
+    def _call(self, value): return GENESIS if value == 'genesis' else value
+    def at(self, _): return _At()
+    def read(self, name, **_):
+        assert name == 'block_info'
+        return {{'hash': '0x' + 'b' * 64}}
+    def close(self): pass
+
+storage = SimpleNamespace(
+    SubtensorModule=SimpleNamespace(
+        SubnetOwner='SubnetOwner', MechanismCountCurrent='MechanismCountCurrent'
+    )
+)
+""",
+        encoding="utf-8",
+    )
+    endpoint = "wss://subtensor.example:443"
+    payload = canonical(envelope)
+    with _server(payload) as url:
+        for index, (flag, compatibility) in enumerate(
+            (("--network", ()), ("--subtensor-endpoint", ("--live",)))
+        ):
+            environment = {
+                **os.environ,
+                "PYTHONPATH": str(runtime),
+                "PYTEST_CURRENT_TEST": "fixture",
+                "ATELIER_TEST_TRANSPORT_LOG": str(transport_log),
+            }
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "forge.inference.light",
+                    "--state-dir",
+                    str(tmp_path / f"state-{index}"),
+                    "--url",
+                    url,
+                    "--allow-http-fixture",
+                    *compatibility,
+                    "--dry-run",
+                    "--once",
+                    flag,
+                    endpoint,
+                ],
+                cwd=runtime,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert result.returncode == 0, result.stderr + result.stdout
+            dry_run = json.loads((tmp_path / f"state-{index}" / "live-dry-run.json").read_text())
+            assert all(
+                isinstance(pair, list) and len(pair) == 2 for pair in dry_run["relativeWeights"]
+            )
+    assert [json.loads(line) for line in transport_log.read_text().splitlines()] == [
+        [endpoint, [], []],
+        [endpoint, [], []],
+    ]
+
+
+def test_light_cli_default_live_feed_recovers_same_window_after_burn_before_sdk_guard(tmp_path):
+    """A fresh authenticated W+1 feed resumes prospectively after fallback burn."""
+
+    private, public = _keypair(tmp_path)
+    envelope = json.loads(_feed(tmp_path, private))
+    body = envelope["body"]
+    now = int(time.time() * 1000)
+    window_end = now // 3_600_000 * 3_600_000
+    body["mode"] = "live"
+    body["policy"]["windowMs"] = 3_600_000
+    body["policy"]["simulation"]["serviceBudgetBps"] = 500
+    body["ledger"]["window"] = {"startMs": window_end - 3_600_000, "endMs": window_end}
+    body["ledger"]["closedAtMs"] = window_end
+    body["issuedAtMs"] = window_end
+    body["expiresAtMs"] = window_end + 3_600_000
+    body["ledger"]["policyHash"] = digest(body["policy"])
+    message = tmp_path / "default-live-message"
+    message.write_bytes(DOMAIN + canonical(body))
+    envelope["digest"] = digest(body)
+    envelope["signature"] = base64.b64encode(
+        subprocess.run(
+            ["openssl", "pkeyutl", "-sign", "-inkey", str(private), "-rawin", "-in", str(message)],
+            check=True,
+            capture_output=True,
+        ).stdout
+    ).decode("ascii")
+
+    runtime = tmp_path / "runtime"
+    shutil.copytree(Path(__file__).parents[2] / "src" / "forge", runtime / "forge")
+    (runtime / "forge" / "inference" / "defaults.json").write_text(
+        json.dumps({"lightPublicKey": public}), encoding="ascii"
+    )
+    trace = tmp_path / "trace.jsonl"
+    (runtime / "bittensor.py").write_text(
+        f"""import os
+from types import SimpleNamespace
+
+OWNER = {OWNER!r}
+GENESIS = {GENESIS!r}
+MINER_A = {MINER_A!r}
+MINER_B = {MINER_B!r}
+instances = 0
+
+def log(value):
+    with open(os.environ['ATELIER_TEST_TRACE'], 'a', encoding='ascii') as out:
+        out.write(value + '\\n')
+
+class Wallet:
+    def __init__(self, **_kwargs):
+        log('wallet')
+        self.hotkey = SimpleNamespace(ss58_address='validator')
+
+class _Raw:
+    def __init__(self, role): self.role = role
+    def get_chain_finalised_head(self):
+        if self.role == 'publisher':
+            log('publisher-finalized-head')
+            raise RuntimeError('publisher-guard-sentinel')
+        return 'finalized'
+    def get_block_number(self, _): return 1
+    def get_block_hash(self, _): return 'genesis'
+
+class _At:
+    def query(self, item, _):
+        return {{'SubnetOwner': OWNER, 'MechanismCountCurrent': 1}}[item]
+    def read(self, name, **_):
+        assert name == 'metagraph'
+        return {{
+            'hotkeys': ['unused', 'unused', 'unused', MINER_A, MINER_B],
+            'coldkeys': ['unused', 'unused', 'unused', MINER_A, MINER_B],
+        }}
+
+class Subtensor:
+    def __init__(self, **_kwargs):
+        global instances
+        instances += 1
+        self.role = 'publisher' if instances == 1 else 'registry'
+        log(self.role)
+        self.block = 1
+        self._client = SimpleNamespace(_substrate=SimpleNamespace(raw=_Raw(self.role)))
+    def _call(self, value): return GENESIS if value == 'genesis' else value
+    def at(self, _): return _At()
+    def read(self, name, **_):
+        assert name == 'block_info'
+        return {{'hash': '0x' + 'b' * 64}}
+    def close(self): pass
+
+storage = SimpleNamespace(
+    SubtensorModule=SimpleNamespace(
+        SubnetOwner='SubnetOwner', MechanismCountCurrent='MechanismCountCurrent'
+    )
+)
+""",
+        encoding="utf-8",
+    )
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / "live-feed-missing.json").write_text(
+        json.dumps(
+            {
+                "schema": "attelier/light-feed-missing/v1",
+                "missingSinceMs": None,
+                "burnedThroughEndMs": window_end,
+            }
+        ),
+        encoding="utf-8",
+    )
+    with _server(canonical(envelope)) as url:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "forge.inference.light",
+                "--state-dir",
+                str(state),
+                "--url",
+                url,
+                "--allow-http-fixture",
+                "--once",
+                "--wallet.name",
+                "writer",
+                "--wallet.hotkey",
+                "hot",
+            ],
+            cwd=runtime,
+            env={
+                **os.environ,
+                "PYTHONPATH": str(runtime),
+                "PYTEST_CURRENT_TEST": "fixture",
+                "ATELIER_TEST_TRACE": str(trace),
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    assert result.returncode == 1
+    assert result.stdout.strip() == "light_publication_unavailable"
+    assert trace.read_text().splitlines() == [
+        "wallet",
+        "publisher",
+        "registry",
+        "publisher-finalized-head",
+    ]
+    with sqlite3.connect(state / "light.sqlite3") as database:
+        assert database.execute("SELECT status FROM live_intent").fetchall() == [("PREPARED",)]
+
+
+def test_light_cli_default_writer_requires_explicit_wallet_before_sdk_or_fetch(tmp_path):
+    """Default mode reaches the external wallet boundary; dry-run does not."""
+
+    _private, public = _keypair(tmp_path)
+    runtime = tmp_path / "runtime"
+    shutil.copytree(Path(__file__).parents[2] / "src" / "forge", runtime / "forge")
+    (runtime / "forge" / "inference" / "defaults.json").write_text(
+        json.dumps({"lightPublicKey": public}), encoding="ascii"
+    )
+    wallet_log = tmp_path / "wallet.jsonl"
+    (runtime / "bittensor.py").write_text(
+        """import json, os
+from types import SimpleNamespace
+
+class Wallet:
+    def __init__(self, *, name, hotkey, path):
+        with open(os.environ['ATELIER_TEST_WALLET_LOG'], 'a', encoding='utf-8') as out:
+            out.write(json.dumps([name, hotkey, path]) + '\\n')
+        if os.environ.get('ATELIER_TEST_WALLET_MODE') != 'ok':
+            raise RuntimeError('wallet-sentinel')
+        self.hotkey = SimpleNamespace(ss58_address='validator')
+
+class Subtensor:
+    def __init__(self, **_kwargs):
+        with open(os.environ['ATELIER_TEST_WALLET_LOG'], 'a', encoding='utf-8') as out:
+            out.write('subtensor\\n')
+""",
+        encoding="utf-8",
+    )
+    environment = {
+        **os.environ,
+        "PYTHONPATH": str(runtime),
+        "PYTEST_CURRENT_TEST": "fixture",
+        "ATELIER_TEST_WALLET_LOG": str(wallet_log),
+    }
+    requests = []
+    with _counting_server(b"{}", requests) as url:
+        missing = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "forge.inference.light",
+                "--state-dir",
+                str(tmp_path / "missing"),
+                "--url",
+                url,
+                "--allow-http-fixture",
+                "--once",
+            ],
+            cwd=runtime,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert missing.returncode == 2
+        assert "--wallet.name and --wallet.hotkey are required" in missing.stderr
+        assert requests == [] and not wallet_log.exists()
+
+        commands = [
+            ["--wallet.name", "canonical", "--wallet.hotkey", "hot-canonical"],
+            [
+                "--wallet",
+                "alias",
+                "--hotkey",
+                "hot-alias",
+                "--wallet-path",
+                str(tmp_path / "custom-wallets"),
+                "--live",
+            ],
+            [
+                "--wallet.name",
+                "dotted-path",
+                "--wallet.hotkey",
+                "hot-dotted",
+                "--wallet.path",
+                str(tmp_path / "dotted-wallets"),
+            ],
+        ]
+        for index, command in enumerate(commands):
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "forge.inference.light",
+                    "--state-dir",
+                    str(tmp_path / f"writer-{index}"),
+                    "--url",
+                    url,
+                    "--allow-http-fixture",
+                    "--once",
+                    *command,
+                ],
+                cwd=runtime,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert result.returncode == 1
+        assert requests == []
+
+    records = [json.loads(line) for line in wallet_log.read_text().splitlines()]
+    assert records == [
+        ["canonical", "hot-canonical", str(Path.home() / ".bittensor" / "wallets")],
+        ["alias", "hot-alias", str(tmp_path / "custom-wallets")],
+        ["dotted-path", "hot-dotted", str(tmp_path / "dotted-wallets")],
+    ]
+
+
+def test_light_cli_writer_rejects_signed_shadow_feed_before_publication(tmp_path):
+    """A signed review receipt cannot reach publisher submission in default mode."""
+
+    private, public = _keypair(tmp_path)
+    envelope = json.loads(_feed(tmp_path, private))
+    body = envelope["body"]
+    now = int(time.time() * 1000)
+    day_end = now // DAY_MS * DAY_MS
+    body["ledger"]["window"] = {"startMs": day_end - DAY_MS, "endMs": day_end}
+    body["ledger"]["closedAtMs"] = day_end
+    body["issuedAtMs"] = day_end
+    body["expiresAtMs"] = day_end + DAY_MS
+    body["ledger"]["policyHash"] = digest(body["policy"])
+    message = tmp_path / "shadow-message"
+    message.write_bytes(DOMAIN + canonical(body))
+    envelope["digest"] = digest(body)
+    envelope["signature"] = base64.b64encode(
+        subprocess.run(
+            ["openssl", "pkeyutl", "-sign", "-inkey", str(private), "-rawin", "-in", str(message)],
+            check=True,
+            capture_output=True,
+        ).stdout
+    ).decode("ascii")
+
+    runtime = tmp_path / "runtime"
+    shutil.copytree(Path(__file__).parents[2] / "src" / "forge", runtime / "forge")
+    (runtime / "forge" / "inference" / "defaults.json").write_text(
+        json.dumps({"lightPublicKey": public}), encoding="ascii"
+    )
+    trace = tmp_path / "trace.jsonl"
+    (runtime / "bittensor.py").write_text(
+        """import os
+from types import SimpleNamespace
+
+class Wallet:
+    def __init__(self, **_kwargs):
+        with open(os.environ['ATELIER_TEST_TRACE'], 'a', encoding='ascii') as out:
+            out.write('wallet\\n')
+        self.hotkey = SimpleNamespace(ss58_address='validator')
+
+class Subtensor:
+    def __init__(self, **_kwargs):
+        with open(os.environ['ATELIER_TEST_TRACE'], 'a', encoding='ascii') as out:
+            out.write('subtensor\\n')
+""",
+        encoding="utf-8",
+    )
+    with _server(canonical(envelope)) as url:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "forge.inference.light",
+                "--state-dir",
+                str(tmp_path / "state"),
+                "--url",
+                url,
+                "--allow-http-fixture",
+                "--once",
+                "--wallet.name",
+                "writer",
+                "--wallet.hotkey",
+                "hot",
+            ],
+            cwd=runtime,
+            env={
+                **os.environ,
+                "PYTHONPATH": str(runtime),
+                "PYTEST_CURRENT_TEST": "fixture",
+                "ATELIER_TEST_TRACE": str(trace),
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    assert result.returncode == 1
+    assert result.stdout.strip() == "light_live_feed_required"
+    assert trace.read_text().splitlines() == ["wallet", "subtensor"]
 
 
 def test_hourly_live_feed_requires_fixed_five_percent_and_preserves_quantized_ratio(tmp_path):
@@ -632,6 +1277,163 @@ def test_restart_reconciles_ambiguous_submission_without_retransmit_and_pending_
     assert restarted_publisher.submits == 1
 
 
+def _legacy_transport_row(tmp_path, status, endpoint="wss://rpc.example:443"):
+    registry = {
+        "subnetOwnerColdkey": OWNER,
+        "miners": [{"uid": 4, "hotkey": "worker", "coldkey": "worker-cold"}],
+    }
+    artifact = {"miners": [{"uid": 4, "hotkey": "worker", "eligibleVideos": 1}]}
+    body = {
+        "ledger": {"sequence": 1, "window": {"startMs": 0, "endMs": 3_600_000}},
+        "registry": registry,
+    }
+    legacy = LiveIntent(
+        1,
+        digest(body),
+        body["ledger"]["window"],
+        digest(registry),
+        {0: 95, 4: 5},
+        {0: ("", OWNER), 4: ("worker", "worker-cold")},
+        endpoint,
+    )
+    journal = LiveJournal(tmp_path / "light.sqlite3")
+    original = canonical(legacy.as_dict()).decode("ascii")
+    with journal._connect() as db:
+        db.execute(
+            "INSERT INTO live_intent(sequence,intent,status,receipt,updated_at) VALUES(?,?,?,?,?)",
+            (
+                1,
+                original,
+                status,
+                json.dumps({"status": status}) if status != "PREPARED" else None,
+                0,
+            ),
+        )
+    return journal, body, registry, artifact, legacy, original
+
+
+def test_legacy_transport_label_reconciles_without_rewriting_then_new_intent_is_finney(tmp_path):
+    """A prior URL-labelled journal remains recoverable but never seeds new identity."""
+
+    class Publisher:
+        def __init__(self):
+            self.submits = 0
+            self.reconciled_networks = []
+
+        def guard(self, _intent):
+            return {}
+
+        def submit(self, _intent, _guard):
+            self.submits += 1
+            return {"status": "COMMITTED"}
+
+        def reconcile(self, intent, receipt):
+            self.reconciled_networks.append(intent.network)
+            return {**receipt, "status": "REVEALED"}
+
+    journal, first, registry, artifact, legacy, original = _legacy_transport_row(
+        tmp_path, "COMMITTED"
+    )
+    second = {
+        "ledger": {"sequence": 2, "window": {"startMs": 3_600_000, "endMs": 7_200_000}},
+        "registry": registry,
+    }
+    with pytest.raises(PublicationError, match="journal_intent"):
+        journal.prepare(legacy)
+
+    publisher = Publisher()
+    restored = LivePublisher(journal, publisher).process(first, artifact)
+    assert restored["status"] == "REVEALED"
+    assert restored["intent"]["network"] == "wss://rpc.example:443"
+    assert publisher.submits == 0
+    assert publisher.reconciled_networks == ["wss://rpc.example:443"]
+    with journal._connect() as db:
+        assert (
+            db.execute("SELECT intent FROM live_intent WHERE sequence=1").fetchone()[0] == original
+        )
+
+    fresh = LivePublisher(journal, publisher).process(second, artifact)
+    assert fresh["status"] == "COMMITTED"
+    assert fresh["intent"]["network"] == "finney"
+    assert publisher.submits == 1
+    with journal._connect() as db:
+        assert (
+            json.loads(db.execute("SELECT intent FROM live_intent WHERE sequence=2").fetchone()[0])[
+                "network"
+            ]
+            == "finney"
+        )
+
+    invalid = legacy.as_dict()
+    for field, value in (("network", "test"), ("netuid", 125), ("mechanism", 1)):
+        changed = {**invalid, field: value}
+        with pytest.raises(PublicationError, match="journal_intent"):
+            LiveIntent.from_dict(changed)
+
+
+def test_legacy_prepared_transport_intent_is_journaled_before_submit_without_rewrite(tmp_path):
+    journal, body, _registry, artifact, _legacy, original = _legacy_transport_row(
+        tmp_path, "PREPARED"
+    )
+
+    class Publisher:
+        def __init__(self):
+            self.before_submit = None
+
+        def guard(self, _intent):
+            return {"guard": "fixture"}
+
+        def submit(self, intent, _guard):
+            with journal._connect() as db:
+                self.before_submit = db.execute(
+                    "SELECT intent,status FROM live_intent WHERE sequence=?", (intent.sequence,)
+                ).fetchone()
+            return {"status": "COMMITTED"}
+
+        def reconcile(self, _intent, receipt):
+            return receipt
+
+    publisher = Publisher()
+    result = LivePublisher(journal, publisher).process(body, artifact)
+    assert result["status"] == "COMMITTED"
+    assert publisher.before_submit == (original, "SUBMITTING")
+    with journal._connect() as db:
+        assert db.execute("SELECT intent,status FROM live_intent WHERE sequence=1").fetchone() == (
+            original,
+            "COMMITTED",
+        )
+
+
+def test_legacy_unknown_transport_intent_reconciles_without_retransmit(tmp_path):
+    journal, body, _registry, artifact, _legacy, original = _legacy_transport_row(
+        tmp_path, "UNKNOWN_AFTER_SUBMIT", "ws://rpc.example:9944"
+    )
+
+    class Publisher:
+        submits = 0
+
+        def guard(self, _intent):
+            raise AssertionError("an unknown submission must never prepare another call")
+
+        def submit(self, _intent, _guard):
+            self.submits += 1
+            raise AssertionError("an unknown submission must never retransmit")
+
+        def reconcile(self, intent, receipt):
+            assert intent.network == "ws://rpc.example:9944"
+            return receipt
+
+    publisher = Publisher()
+    with pytest.raises(PublicationError, match="unreconciled_submission"):
+        LivePublisher(journal, publisher).process(body, artifact)
+    assert publisher.submits == 0
+    with journal._connect() as db:
+        assert db.execute("SELECT intent,status FROM live_intent WHERE sequence=1").fetchone() == (
+            original,
+            "UNKNOWN_AFTER_SUBMIT",
+        )
+
+
 def test_ambiguous_restart_stays_blocked_and_outage_burn_blocks_same_closed_window(tmp_path):
     class UnknownPublisher:
         submits = 0
@@ -680,6 +1482,4 @@ def test_ambiguous_restart_stays_blocked_and_outage_burn_blocks_same_closed_wind
     }
     with pytest.raises(PublicationError, match="unreconciled_submission"):
         LivePublisher(journal, UnknownPublisher()).process(later, artifact)
-    assert outage_blocks_service(body, {"burnedThroughEndMs": 3_600_000})
-    assert not outage_blocks_service(later, {"burnedThroughEndMs": 3_600_000})
     assert _chain_bytes("0x63697068657274657874") == b"ciphertext"
