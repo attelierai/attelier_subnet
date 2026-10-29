@@ -577,7 +577,10 @@ def main() -> None:
                         },
                         "registry": {"subnetOwnerColdkey": BURN_OWNER_COLDKEY, "miners": []},
                     }
-                    with contextlib.suppress(ValueError):
+                    # SDK ChainError inherits directly from Exception. Both
+                    # preflight failures and reconciliation RPC errors must
+                    # leave the journal intact for the next polling cycle.
+                    try:
                         burned = publisher.process(outage, {"miners": []})
                         if burned["status"] in {"COMMITTED", "REVEAL_PENDING", "REVEALED"}:
                             outage_state = {
@@ -586,6 +589,9 @@ def main() -> None:
                                 "burnedThroughEndMs": outage["ledger"]["window"]["endMs"],
                             }
                             _atomic_write(missing_path, outage_state)
+                    except Exception:
+                        runner.unavailable("light_publication_unavailable")
+                        print("light_publication_unavailable", flush=True)
             if args.once:
                 raise SystemExit(1) from error
         else:
@@ -623,7 +629,10 @@ def main() -> None:
                     # it never compensates the outage or rewrites the burn.
                     assert publisher is not None
                     publisher.process(body, artifact)
-            except (OSError, RuntimeError, sqlite3.Error, ValueError) as error:
+            except Exception as error:
+                # The SDK raises ChainError (not RuntimeError) for rate limits
+                # and RPC failures. Retry via the durable publisher on the
+                # next poll: PREPARED can retry; uncertain sends reconcile.
                 runner.unavailable("light_publication_unavailable")
                 print("light_publication_unavailable", flush=True)
                 if args.once:

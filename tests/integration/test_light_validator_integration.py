@@ -627,7 +627,10 @@ storage = SimpleNamespace(
     ]
 
 
-def test_light_cli_default_live_feed_recovers_same_window_after_burn_before_sdk_guard(tmp_path):
+@pytest.mark.parametrize("sdk_error", ["RuntimeError", "ChainError"])
+def test_light_cli_default_live_feed_recovers_same_window_after_burn_before_sdk_guard(
+    tmp_path, sdk_error
+):
     """A fresh authenticated W+1 feed resumes prospectively after fallback burn."""
 
     private, public = _keypair(tmp_path)
@@ -670,6 +673,9 @@ MINER_A = {MINER_A!r}
 MINER_B = {MINER_B!r}
 instances = 0
 
+class ChainError(Exception):
+    pass
+
 def log(value):
     with open(os.environ['ATELIER_TEST_TRACE'], 'a', encoding='ascii') as out:
         out.write(value + '\\n')
@@ -680,11 +686,14 @@ class Wallet:
         self.hotkey = SimpleNamespace(ss58_address='validator')
 
 class _Raw:
-    def __init__(self, role): self.role = role
+    def __init__(self, role): self.role, self.calls = role, 0
     def get_chain_finalised_head(self):
         if self.role == 'publisher':
             log('publisher-finalized-head')
-            raise RuntimeError('publisher-guard-sentinel')
+            self.calls += 1
+            if self.calls == 2:
+                raise SystemExit(0)  # External boundary proves the polling loop survived.
+            raise {sdk_error}('publisher-guard-sentinel')
         return 'finalized'
     def get_block_number(self, _): return 1
     def get_block_hash(self, _): return 'genesis'
@@ -745,7 +754,7 @@ storage = SimpleNamespace(
                 "--url",
                 url,
                 "--allow-http-fixture",
-                "--once",
+                *(["--once"] if sdk_error == "RuntimeError" else ["--interval-seconds", "1"]),
                 "--wallet.name",
                 "writer",
                 "--wallet.hotkey",
@@ -761,15 +770,16 @@ storage = SimpleNamespace(
             capture_output=True,
             text=True,
             check=False,
+            timeout=20,
         )
-    assert result.returncode == 1
+    assert result.returncode == (1 if sdk_error == "RuntimeError" else 0)
     assert result.stdout.strip() == "light_publication_unavailable"
     assert trace.read_text().splitlines() == [
         "wallet",
         "publisher",
         "registry",
         "publisher-finalized-head",
-    ]
+    ] + (["publisher-finalized-head"] if sdk_error == "ChainError" else [])
     with sqlite3.connect(state / "light.sqlite3") as database:
         assert database.execute("SELECT status FROM live_intent").fetchall() == [("PREPARED",)]
 
@@ -1173,6 +1183,11 @@ def test_sdk_m0_persists_exact_call_before_submit_reconciles_and_blocks_uid_reus
             # This assertion proves SDK SetWeights (with default version_key 0)
             # reached the fixture rather than a hand-rolled call.
             assert intent.netuid == 126 and intent.mechid == 0 and intent.version_key == 0
+            if self.submitted == 0:
+                from bittensor.result import ChainError
+
+                self.submitted += 1
+                raise ChainError("Weights were last set 69 blocks ago; rate limit is 100")
             return Plan()
 
         def block_info(self, height):
@@ -1203,7 +1218,8 @@ def test_sdk_m0_persists_exact_call_before_submit_reconciles_and_blocks_uid_reus
 
     chain = Chain()
     journal = LiveJournal(tmp_path / "light.sqlite3")
-    publisher = LivePublisher(journal, SdkM0Publisher(chain, Signer(), "validator"))
+    adapter = SdkM0Publisher(chain, Signer(), "validator", lock_dir=tmp_path / "locks")
+    publisher = LivePublisher(journal, adapter)
     body = {
         "ledger": {"sequence": 7, "window": {"startMs": 0, "endMs": 3_600_000}},
         "registry": {
@@ -1212,6 +1228,13 @@ def test_sdk_m0_persists_exact_call_before_submit_reconciles_and_blocks_uid_reus
         },
     }
     artifact = {"miners": [{"uid": 4, "hotkey": MINER_A, "eligibleVideos": 1}]}
+    from bittensor.result import ChainError
+
+    with pytest.raises(ChainError):
+        publisher.process(body, artifact)
+    with journal._connect() as db:
+        assert db.execute("SELECT status FROM live_intent").fetchall() == [("PREPARED",)]
+    assert adapter._submission_lock is None
     committed = publisher.process(body, artifact)
     assert committed["status"] == "COMMITTED"
     with journal._connect() as db:

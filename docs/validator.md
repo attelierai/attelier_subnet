@@ -209,6 +209,13 @@ The publication states distinguish preparation from chain completion:
   finalized weight readback are not yet both confirmed.
 - `REVEALED`: the journal contains the confirmed reveal and weight readback.
 
+SDK rate limits and publication RPC failures report
+`light_publication_unavailable` and retry on the next polling cycle. A preflight
+failure leaves the intent `PREPARED`; an uncertain submission is reconciled
+before another send. The same recovery applies to outage-burn publication.
+Publication failures do not turn an accepted feed into a missing-feed burn.
+With `--once`, a failed publication exits with status 1 instead of polling.
+
 For a read-only publication check, if `sqlite3` is installed:
 
 ```bash
