@@ -17,6 +17,8 @@ from typing import Any
 SCHEMA = "attelier/prelaunch-simulation/v1"
 LEDGER_SCHEMA = "attelier/prelaunch-ledger/v1"
 POLICY_SCHEMA = "attelier/prelaunch-policy/v1"
+LEDGER_SCHEMA_V2 = "attelier/prelaunch-ledger/v2"
+POLICY_SCHEMA_V2 = "attelier/prelaunch-policy/v2"
 REGISTRY_SCHEMA = "attelier/prelaunch-registry/v1"
 GENESIS = "0x2f0555cc76fc2840a25a6ea3b9637146806f1f44b090c175ffde2a7e5ab36c03"
 DAY_MS = 86_400_000
@@ -411,7 +413,7 @@ def _validate_ledger(
     return totals
 
 
-def simulate(
+def _simulate_v1(
     ledger: dict[str, Any], policy: dict[str, Any], registry: dict[str, Any]
 ) -> dict[str, Any]:
     """Return one deterministic, unsigned prelaunch review artifact."""
@@ -534,6 +536,331 @@ def simulate(
     }
 
 
+def _validate_v2(
+    ledger: dict[str, Any], policy: dict[str, Any], registry: dict[str, Any]
+) -> tuple[dict[str, int], dict[str, int], int]:
+    """Validate the separate multi-profile ledger and return video/work units.
+
+    V2 reward merit is frozen policy work, never elapsed miner-reported time.
+    """
+    _namespace(policy, POLICY_SCHEMA_V2, "policy_namespace")
+    allowed = {
+        "schema",
+        "network",
+        "genesis",
+        "netuid",
+        "mechanism",
+        "gatewayPolicy",
+        "workers",
+        "simulation",
+    }
+    if (
+        set(policy) != allowed | {"windowMs"}
+        or not isinstance(policy.get("gatewayPolicy"), dict)
+        or not isinstance(policy.get("workers"), list)
+        or not isinstance(policy.get("simulation"), dict)
+    ):
+        _fail("policy_schema")
+    window_ms = policy.get("windowMs", DAY_MS)
+    if type(window_ms) is not int or window_ms not in {HOUR_MS, DAY_MS}:
+        _fail("policy_window")
+    gateway = policy["gatewayPolicy"]
+    if (
+        set(gateway) != {"minSuccessBps", "rewardEligibility", "serviceProfiles"}
+        or gateway["rewardEligibility"] != "per_job"
+        or gateway["minSuccessBps"] != 0
+        or window_ms != HOUR_MS
+        or not isinstance(gateway["serviceProfiles"], list)
+        or not 1 <= len(gateway["serviceProfiles"]) <= 18
+    ):
+        _fail("policy_gateway")
+    profiles: dict[str, dict[str, Any]] = {}
+    hashes: set[str] = set()
+    for profile in gateway["serviceProfiles"]:
+        duration_value = profile.get("durationMs")
+        expected_id = (
+            f"h3-base-{duration_value // 1_000}s-{profile.get('resolution', '')}-"
+            f"{str(profile.get('aspectRatio', '')).replace(':', 'x')}-20-v1"
+            if type(duration_value) is int
+            else ""
+        )
+        if (
+            not isinstance(profile, dict)
+            or set(profile)
+            != {
+                "id",
+                "hash",
+                "durationMs",
+                "resolution",
+                "aspectRatio",
+                "maxJobSeconds",
+                "maxTtvMs",
+                "rewardWorkUnits",
+                "rewardBasis",
+                "approvalHash",
+            }
+            or _identifier(profile.get("id"), "policy_profile_id") in profiles
+            or _hash(profile.get("hash"), "policy_profile_hash") in hashes
+            or profile.get("id") != expected_id
+            or _hash(profile.get("hash"), "policy_profile_hash") != _h3_profile_hash(profile)
+            or profile.get("rewardBasis") not in {"reference_gpu", "pixel_frames"}
+            or _hash(profile.get("approvalHash"), "policy_approval_hash") is None
+            or profile.get("durationMs") not in {5_000, 10_000, 15_000}
+            or profile.get("resolution") not in {"480p", "768p", "1080p"}
+            or profile.get("aspectRatio") not in {"16:9", "9:16"}
+            or not 1 <= _integer(profile.get("maxJobSeconds"), "policy_job") <= 7_200
+            or not 1 <= _integer(profile.get("maxTtvMs"), "policy_ttv") <= 7_200_000
+            or not 1 <= _integer(profile.get("rewardWorkUnits"), "policy_units") <= 1_000_000_000
+            or (
+                profile.get("rewardBasis") == "pixel_frames"
+                and profile.get("rewardWorkUnits")
+                != round(
+                    1000
+                    * (profile["durationMs"] // 1000 * 24)
+                    * {"480p": 832 * 480, "768p": 1344 * 768, "1080p": 1920 * 1080}[
+                        profile["resolution"]
+                    ]
+                    / (5 * 24 * 832 * 480)
+                )
+            )
+        ):
+            _fail("policy_profile")
+        profiles[profile["id"]] = profile
+        hashes.add(profile["hash"])
+    bindings: dict[tuple[str, str], dict[str, Any]] = {}
+    for worker in policy["workers"]:
+        if (
+            not isinstance(worker, dict)
+            or set(worker) != {"minerHotkey", "workerId", "trustMode", "profileIds"}
+            or worker.get("trustMode") != "operator_whitelist"
+            or not isinstance(worker.get("profileIds"), list)
+            or not worker["profileIds"]
+            or len(set(worker["profileIds"])) != len(worker["profileIds"])
+            or any(not isinstance(i, str) or i not in profiles for i in worker["profileIds"])
+        ):
+            _fail("policy_worker")
+        key = (
+            _hotkey(worker["minerHotkey"], "policy_worker_hotkey"),
+            _identifier(worker["workerId"], "policy_worker_id"),
+        )
+        if key in bindings:
+            _fail("policy_worker_duplicate")
+        bindings[key] = worker
+    simulation = policy["simulation"]
+    if (
+        set(simulation)
+        != {
+            "serviceBudgetBps",
+            "targetVideosPerDay",
+            "nominalMinerEmissionRaoPerDay",
+            "allocationMode",
+        }
+        or simulation["serviceBudgetBps"] != 500
+        or _integer(simulation["targetVideosPerDay"], "policy_target") == 0
+        or simulation["allocationMode"] != "fixed"
+    ):
+        _fail("policy_simulation")
+    _parse_decimal_rao(simulation["nominalMinerEmissionRaoPerDay"])
+    miners = _validate_registry(registry)
+    _namespace(ledger, LEDGER_SCHEMA_V2, "ledger_namespace")
+    required = {
+        "schema",
+        "network",
+        "genesis",
+        "netuid",
+        "mechanism",
+        "window",
+        "sequence",
+        "closedAtMs",
+        "aggregates",
+        "gatewayPolicyHash",
+        "workerPoolHash",
+        "policyHash",
+    }
+    if (
+        set(ledger) != required
+        or not isinstance(ledger.get("window"), dict)
+        or not isinstance(ledger.get("aggregates"), list)
+        or ledger.get("policyHash") != digest(policy)
+        or ledger.get("gatewayPolicyHash") != digest(gateway)
+        or ledger.get("workerPoolHash") != digest(policy["workers"])
+    ):
+        _fail("ledger_schema")
+    window = ledger["window"]
+    if (
+        set(window) != {"startMs", "endMs"}
+        or _integer(window["endMs"], "ledger_end") - _integer(window["startMs"], "ledger_start")
+        != window_ms
+        or window["startMs"] % window_ms
+        or _integer(ledger["sequence"], "ledger_sequence") == 0
+        or _integer(ledger["closedAtMs"], "ledger_closed") < window["endMs"]
+    ):
+        _fail("ledger_window")
+    videos: dict[str, int] = {}
+    units: dict[str, int] = {}
+    seen: set[tuple[str, str, str]] = set()
+    names = {
+        "minerHotkey",
+        "workerId",
+        "trustMode",
+        "profileId",
+        "profileHash",
+        "attempted",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "inconclusive",
+        "completedVideoMs",
+        "eligibleSucceeded",
+        "eligibleVideoMs",
+        "slowSucceeded",
+        "eligibleWorkUnits",
+    }
+    for row in ledger["aggregates"]:
+        if not isinstance(row, dict) or set(row) != names:
+            _fail("ledger_aggregate_schema")
+        hotkey = _hotkey(row["minerHotkey"], "ledger_hotkey")
+        worker = _identifier(row["workerId"], "ledger_worker")
+        profile = profiles.get(row.get("profileId"))
+        binding = bindings.get((hotkey, worker))
+        if (
+            not profile
+            or not binding
+            or row.get("profileHash") != profile["hash"]
+            or row.get("trustMode") != "operator_whitelist"
+            or row["profileId"] not in binding["profileIds"]
+            or (hotkey, worker, row["profileId"]) in seen
+            or hotkey not in miners
+        ):
+            _fail("ledger_binding")
+        seen.add((hotkey, worker, row["profileId"]))
+        (
+            attempted,
+            succeeded,
+            failed,
+            cancelled,
+            inconclusive,
+            eligible,
+            slow,
+            completed,
+            eligible_ms,
+            eligible_units,
+        ) = (
+            _integer(row[k], "ledger_counts")
+            for k in (
+                "attempted",
+                "succeeded",
+                "failed",
+                "cancelled",
+                "inconclusive",
+                "eligibleSucceeded",
+                "slowSucceeded",
+                "completedVideoMs",
+                "eligibleVideoMs",
+                "eligibleWorkUnits",
+            )
+        )
+        if (
+            attempted != succeeded + failed + cancelled + inconclusive
+            or eligible + slow != succeeded
+            or completed != succeeded * profile["durationMs"]
+            or eligible_ms != eligible * profile["durationMs"]
+            or eligible_units != eligible * profile["rewardWorkUnits"]
+        ):
+            _fail("ledger_counts")
+        if eligible:
+            videos[hotkey] = _safe_derived(
+                videos.get(hotkey, 0) + eligible, "derived_eligible_videos"
+            )
+            units[hotkey] = _safe_derived(
+                units.get(hotkey, 0) + eligible_units, "derived_eligible_units"
+            )
+    return videos, units, window_ms
+
+
+def _simulate_v2(
+    ledger: dict[str, Any], policy: dict[str, Any], registry: dict[str, Any]
+) -> dict[str, Any]:
+    videos, eligible, window_ms = _validate_v2(ledger, policy, registry)
+    # Reuse the v1 artifact math after replacing only its merit source.  The
+    # public artifact preserves counts and makes the unit source explicit.
+    legacy_policy = {
+        **policy,
+        "schema": POLICY_SCHEMA,
+        "gatewayPolicy": {
+            "minSuccessBps": 0,
+            "maxTtvMs": 1,
+            "rewardEligibility": "per_job",
+            "serviceProfile": {
+                "id": "legacy",
+                "hash": "0" * 64,
+                "durationMs": 5_000,
+                "resolution": "480p",
+            },
+        },
+        "workers": [
+            {
+                "minerHotkey": w["minerHotkey"],
+                "workerId": w["workerId"],
+                "trustMode": "operator_whitelist",
+            }
+            for w in policy["workers"]
+        ],
+    }
+    # Build a minimal compatible ledger whose eligible count is the frozen work
+    # unit. This changes allocation merit only; v2's original receipt remains
+    # in `input` below and counts are restored after simulation.
+    aggregates = []
+    for hotkey, units in eligible.items():
+        worker = next(w for w in legacy_policy["workers"] if w["minerHotkey"] == hotkey)
+        aggregates.append(
+            {
+                "minerHotkey": hotkey,
+                "workerId": worker["workerId"],
+                "trustMode": "operator_whitelist",
+                "profileId": "legacy",
+                "profileHash": "0" * 64,
+                "attempted": units,
+                "succeeded": units,
+                "failed": 0,
+                "cancelled": 0,
+                "inconclusive": 0,
+                "completedVideoMs": units * 5_000,
+                "eligibleSucceeded": units,
+                "eligibleVideoMs": units * 5_000,
+                "slowSucceeded": 0,
+            }
+        )
+    legacy_ledger = {
+        **ledger,
+        "schema": LEDGER_SCHEMA,
+        "policyHash": digest(legacy_policy),
+        "gatewayPolicyHash": digest(legacy_policy["gatewayPolicy"]),
+        "workerPoolHash": digest(legacy_policy["workers"]),
+        "aggregates": aggregates,
+    }
+    artifact = _simulate_v1(legacy_ledger, legacy_policy, registry)
+    artifact["input"]["ledgerSha256"] = digest(ledger)
+    artifact["input"]["policySha256"] = ledger["policyHash"]
+    artifact["input"]["gatewayPolicyHash"] = ledger["gatewayPolicyHash"]
+    artifact["input"]["workerPoolHash"] = ledger["workerPoolHash"]
+    artifact["service"]["eligibleVideos"] = sum(videos.values())
+    artifact["service"]["eligibleWorkUnits"] = sum(eligible.values())
+    artifact["service"]["rewardMerit"] = "eligibleWorkUnits"
+    for row in artifact["miners"]:
+        row["eligibleVideos"] = videos.get(row["hotkey"], 0)
+        row["eligibleWorkUnits"] = eligible.get(row["hotkey"], 0)
+    return artifact
+
+
+def simulate(
+    ledger: dict[str, Any], policy: dict[str, Any], registry: dict[str, Any]
+) -> dict[str, Any]:
+    if policy.get("schema") == POLICY_SCHEMA_V2 or ledger.get("schema") == LEDGER_SCHEMA_V2:
+        return _simulate_v2(ledger, policy, registry)
+    return _simulate_v1(ledger, policy, registry)
+
+
 def _timestamp(value: Any, reason: str) -> tuple[str, int]:
     if not isinstance(value, str):
         _fail(reason)
@@ -544,6 +871,78 @@ def _timestamp(value: Any, reason: str) -> tuple[str, int]:
     if parsed.tzinfo is None:
         _fail(reason)
     return parsed.astimezone(UTC).isoformat().replace("+00:00", "Z"), int(parsed.timestamp())
+
+
+def _h3_profile_hash(profile: dict[str, Any]) -> str:
+    """Mirror the gateway's H3 identity, excluding operator calibration."""
+    duration = profile["durationMs"] // 1_000
+    landscape = {"480p": (832, 480), "768p": (1344, 768), "1080p": (1920, 1080)}[
+        profile["resolution"]
+    ]
+    width, height = landscape if profile["aspectRatio"] == "16:9" else landscape[::-1]
+    native_frames = duration * 24 + (5 - duration * 24 % 17 + 17) % 17
+    workflow_source = "c1dc580075d12dfe739e82591b2bc1fa84bd0536e53db7a5cdc16b1e93d9bd79"
+    runtime = {
+        "schema": "attelier/h3-runtime-identity/v1",
+        "manifestSha256": "0547f0b4319dd2ca42fb23b27458d98a13b4547baf1174e591bf560a27af351e",
+        "comfyRevision": "b0f4b7b294ce482a2e071d9d762c133d38c7aa07",
+        "workflow": {
+            "sampler": "res_multistep",
+            "scheduler": "simple",
+            "denoise": 1,
+            "steps": 20,
+            "fps": 24,
+            "nativeFrameRule": "17k+5",
+            "workflowSourceSha256": workflow_source,
+        },
+        "checkpoints": [
+            {
+                "role": "diffusion_model",
+                "filename": "minimax_h3_fl2va_pruned_nvfp4.safetensors",
+                "sha256": "8111a496dae7d47c914b8a7ef24d6ad7115c0576cd43eeb4be97c3c760df9502",
+                "bytes": 20067070985,
+            },
+            {
+                "role": "text_encoder",
+                "filename": "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+                "sha256": "35a88d51044231fe332301d7a62aa81e3f2cba62febeb446e2c1e3e0ef76f2c6",
+                "bytes": 15687142551,
+            },
+            {
+                "role": "video_vae",
+                "filename": "vae/minimax_h3_video_vae_fp16.safetensors",
+                "sha256": "7c1f131492e7eddacaac9069a61b81bdd39de5cc96561e677c5eab1cdce5e522",
+                "bytes": 5207808496,
+            },
+            {
+                "role": "audio_vae",
+                "filename": "vae/minimax_h3_audio_vae_fp32.safetensors",
+                "sha256": "8e505d95dd1561d47abd43d4238fd40d9bb1ae9e147ed0a4cba778d76ae4db48",
+                "bytes": 605254808,
+            },
+        ],
+    }
+    return digest(
+        {
+            "schema": "attelier/h3-service-profile/v1",
+            "durationMs": profile["durationMs"],
+            "resolution": profile["resolution"],
+            "aspectRatio": profile["aspectRatio"],
+            "width": width,
+            "height": height,
+            "nativeFrames": native_frames,
+            "fps": 24,
+            "audio": True,
+            "steps": 20,
+            "checkpoint": {
+                "id": "minimax_h3_fl2va_pruned_nvfp4.safetensors",
+                "version": "h3-fl2va-nvfp4-v1",
+            },
+            "runtime": runtime,
+            "profile": "base",
+            "lora": None,
+        }
+    )
 
 
 def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
@@ -561,12 +960,15 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
         "miners",
         "serviceProfile",
     }
+    v2 = config.get("schema") == "attelier/subnet-h3/v2"
+    required_v2 = required | {"serviceProfiles"}
     optional = {"requireFrozenLightWindow"}
-    if (set(config) != required and set(config) != required | optional) or config.get(
-        "schema"
-    ) != "attelier/subnet-h3/v1":
+    if (
+        set(config) != (required_v2 | optional if v2 else required)
+        and set(config) != (required_v2 if v2 else required | optional)
+    ) or config.get("schema") not in {"attelier/subnet-h3/v1", "attelier/subnet-h3/v2"}:
         _fail("prelaunch_config_schema")
-    _namespace(config, "attelier/subnet-h3/v1", "prelaunch_config_namespace")
+    _namespace(config, str(config["schema"]), "prelaunch_config_namespace")
     if (
         config["mode"] != "prelaunch"
         or config["trustMode"] != "operator_whitelist"
@@ -581,6 +983,48 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
         )
     ):
         _fail("prelaunch_config")
+    approved: set[str] = set()
+    if v2:
+        if (
+            config.get("requireFrozenLightWindow") is not True
+            or not isinstance(config.get("serviceProfiles"), list)
+            or not config["serviceProfiles"]
+            or len(config["serviceProfiles"]) > 18
+        ):
+            _fail("prelaunch_config_profiles")
+        for value in config["serviceProfiles"]:
+            if (
+                not isinstance(value, dict)
+                or set(value)
+                != {
+                    "id",
+                    "hash",
+                    "durationMs",
+                    "resolution",
+                    "aspectRatio",
+                    "maxJobSeconds",
+                    "maxTtvMs",
+                    "rewardWorkUnits",
+                    "rewardBasis",
+                    "approvalHash",
+                }
+                or _identifier(value.get("id"), "prelaunch_config_profile") in approved
+                or _hash(value.get("hash"), "prelaunch_config_profile") != _h3_profile_hash(value)
+                or value.get("rewardBasis") not in {"reference_gpu", "pixel_frames"}
+                or _hash(value.get("approvalHash"), "prelaunch_config_profile") is None
+                or value.get("durationMs") not in {5_000, 10_000, 15_000}
+                or value.get("resolution") not in {"480p", "768p", "1080p"}
+                or value.get("aspectRatio") not in {"16:9", "9:16"}
+                or not 1
+                <= _integer(value.get("maxJobSeconds"), "prelaunch_config_profile")
+                <= 7_200
+                or not 1 <= _integer(value.get("maxTtvMs"), "prelaunch_config_profile") <= 7_200_000
+                or not 1
+                <= _integer(value.get("rewardWorkUnits"), "prelaunch_config_profile")
+                <= 1_000_000_000
+            ):
+                _fail("prelaunch_config_profiles")
+            approved.add(value["id"])
     for client in [*config["allowedClients"], *config["syntheticClientIds"]]:
         if not isinstance(client, str) or client == "*" or not _CLIENT_ID.fullmatch(client):
             _fail("prelaunch_config_clients")
@@ -611,6 +1055,15 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
         _hotkey(miner["hotkey"], "prelaunch_config_miner")
         _identifier(miner["workerId"], "prelaunch_config_miner")
         reviewed = _integer(miner["operatorReviewedExpires"], "prelaunch_config_review")
+        if v2:
+            ids = miner.get("profileIds")
+            if (
+                not isinstance(ids, list)
+                or not ids
+                or len(set(ids)) != len(ids)
+                or any(not isinstance(value, str) or value not in approved for value in ids)
+            ):
+                _fail("prelaunch_config_miner")
         identifiers.add(identifier)
         miners.append(
             {

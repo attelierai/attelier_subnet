@@ -106,7 +106,10 @@ def eligible_workers(artifact: dict[str, Any]) -> dict[int, int]:
     for row in rows:
         if not isinstance(row, dict):
             raise PublicationError("light_live_artifact")
-        merit, uid, hotkey = row.get("eligibleVideos"), row.get("uid"), row.get("hotkey")
+        # V2 freezes policy-calibrated work units in the signed ledger.  V1
+        # artifacts have no such field and retain their historical count merit.
+        merit = row.get("eligibleWorkUnits", row.get("eligibleVideos"))
+        uid, hotkey = row.get("uid"), row.get("hotkey")
         if type(merit) is not int or type(uid) is not int or not isinstance(hotkey, str):
             raise PublicationError("light_live_artifact")
         if merit > 0:

@@ -29,6 +29,9 @@ DEFAULT_URL = "https://inference.attelier.ai/v1/subnet/126/light/latest"
 ENVELOPE_SCHEMA = "attelier/light-feed/v1"
 BODY_SCHEMA = "attelier/light-input/v1"
 DOMAIN = b"attelier/light-input/v1\0"
+ENVELOPE_SCHEMA_V2 = "attelier/light-feed/v2"
+BODY_SCHEMA_V2 = "attelier/light-input/v2"
+DOMAIN_V2 = b"attelier/light-input/v2\0"
 MAX_RESPONSE_BYTES = 1_048_576
 MAX_BUDGET_BPS = 1_000
 STATUS_SCHEMA = "attelier/light-status/v1"
@@ -156,10 +159,11 @@ def verify_feed(
     if len(raw) > MAX_RESPONSE_BYTES:
         raise LightError("light_feed_too_large")
     envelope = _strict_json(raw)
-    if (
-        set(envelope) != {"schema", "keyId", "body", "digest", "signature"}
-        or envelope.get("schema") != ENVELOPE_SCHEMA
-    ):
+    schema = envelope.get("schema")
+    if set(envelope) != {"schema", "keyId", "body", "digest", "signature"} or schema not in {
+        ENVELOPE_SCHEMA,
+        ENVELOPE_SCHEMA_V2,
+    }:
         raise LightError("light_envelope_schema")
     body = envelope.get("body")
     if not isinstance(body, dict):
@@ -177,7 +181,9 @@ def verify_feed(
         "ledger",
         "registry",
     }
-    if set(body) != required or body.get("schema") != BODY_SCHEMA:
+    expected_body = BODY_SCHEMA_V2 if schema == ENVELOPE_SCHEMA_V2 else BODY_SCHEMA
+    domain = DOMAIN_V2 if schema == ENVELOPE_SCHEMA_V2 else DOMAIN
+    if set(body) != required or body.get("schema") != expected_body:
         raise LightError("light_body_schema")
     if (
         body.get("network") != "finney"
@@ -196,7 +202,7 @@ def verify_feed(
     ):
         raise LightError("light_digest_or_key")
     if not isinstance(envelope.get("signature"), str) or not _verify_ed25519(
-        key, DOMAIN + canonical(body), envelope["signature"]
+        key, domain + canonical(body), envelope["signature"]
     ):
         raise LightError("light_signature")
     issued, expires = body.get("issuedAtMs"), body.get("expiresAtMs")

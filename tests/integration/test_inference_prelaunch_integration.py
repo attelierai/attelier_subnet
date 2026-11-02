@@ -497,6 +497,39 @@ def test_prelaunch_registry_cli_projects_finalized_fixture_and_simulation_regist
     assert result.returncode != 0 and "prelaunch_config" in result.stderr
 
 
+def test_prelaunch_registry_cli_accepts_v2_profile_bound_workers(tmp_path):
+    from forge.inference.prelaunch import _h3_profile_hash
+
+    config, snapshot = registry_inputs()
+    profile = {
+        "id": "h3-base-5s-480p-16x9-20-v1",
+        "durationMs": 5000,
+        "resolution": "480p",
+        "aspectRatio": "16:9",
+        "maxJobSeconds": 600,
+        "maxTtvMs": 600000,
+        "rewardWorkUnits": 1000,
+        "rewardBasis": "pixel_frames",
+        "approvalHash": "d" * 64,
+    }
+    profile["hash"] = _h3_profile_hash(profile)
+    config["schema"] = "attelier/subnet-h3/v2"
+    config["requireFrozenLightWindow"] = True
+    config["serviceProfiles"] = [profile]
+    # The root profile remains the legacy enrollment/runtime-binding identity;
+    # dynamic service capability is declared independently in serviceProfiles.
+    config["serviceProfile"] = {"id": "h3-base-5s-480p-20-v1", "hash": "a" * 64}
+    config["miners"][0]["profileIds"] = [profile["id"]]
+    result, out, simulation, dashboard = run_registry_cli(tmp_path, config, snapshot)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(out.read_text())["workers"]["fixture-owner"]["hotkey"] == OWNER_HOTKEY
+    assert json.loads(simulation.read_text())["miners"][0]["uid"] == 3
+    assert json.loads(dashboard.read_text())["network"] == "finney"
+    config["miners"][0]["profileIds"] = ["not-approved"]
+    result, _, _, _ = run_registry_cli(tmp_path, config, snapshot)
+    assert result.returncode != 0 and "prelaunch_config_miner" in result.stderr
+
+
 def test_prelaunch_registry_cli_fails_closed_for_expired_or_wrong_finalized_snapshot(tmp_path):
     config, snapshot = registry_inputs(reviewed_expires=1)
     result, _, _, _ = run_registry_cli(tmp_path, config, snapshot)

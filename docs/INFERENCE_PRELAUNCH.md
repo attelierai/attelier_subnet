@@ -29,6 +29,14 @@ profile, custody, and TTV-eligible completion then contributes independently.
 The historic interpretation remains when the field is absent: the aggregate
 must meet its configured success threshold. Unknown values fail closed.
 
+For signed v2 policy activation, each approved profile records `rewardBasis`
+(`pixel_frames` or `reference_gpu`) and an operator `approvalHash`. The
+deterministic `pixel_frames` basis uses duration × pixels normalized to the
+5-second 480p landscape baseline = 1,000 and does not require a GPU benchmark.
+The benchmark-backed `reference_gpu` basis is optional. The gateway must admit
+only workers reporting protocol version 2 and runtime version 1.2.0; all v1
+history remains unchanged.
+
 The artifact separates service merit, unsigned proposed weights, counterfactual
 allocation, and expected payout. The current live share is fixed at 500 bps
 (5%) of the mining pool; empty eligible service is a full burn. If no verified
