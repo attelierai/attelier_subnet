@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,6 +30,7 @@ _HASH = re.compile(r"[0-9a-f]{64}\Z")
 _HOTKEY = re.compile(r"[1-9A-HJ-NP-Za-km-z]{47,48}\Z")
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
 _CLIENT_ID = re.compile(r"[A-Za-z0-9:_-]{1,100}\Z")
+_H3_CATALOG_PATH = Path(__file__).with_name("h3-checkpoint-catalog.json")
 
 
 def _fail(reason: str) -> None:
@@ -577,12 +579,8 @@ def _validate_v2(
     profiles: dict[str, dict[str, Any]] = {}
     hashes: set[str] = set()
     for profile in gateway["serviceProfiles"]:
-        duration_value = profile.get("durationMs")
-        expected_id = (
-            f"h3-base-{duration_value // 1_000}s-{profile.get('resolution', '')}-"
-            f"{str(profile.get('aspectRatio', '')).replace(':', 'x')}-20-v1"
-            if type(duration_value) is int
-            else ""
+        approved_identity = (
+            _approved_h3_profile_identity(profile) if isinstance(profile, dict) else None
         )
         if (
             not isinstance(profile, dict)
@@ -601,8 +599,7 @@ def _validate_v2(
             }
             or _identifier(profile.get("id"), "policy_profile_id") in profiles
             or _hash(profile.get("hash"), "policy_profile_hash") in hashes
-            or profile.get("id") != expected_id
-            or _hash(profile.get("hash"), "policy_profile_hash") != _h3_profile_hash(profile)
+            or approved_identity is None
             or profile.get("rewardBasis") not in {"reference_gpu", "pixel_frames"}
             or _hash(profile.get("approvalHash"), "policy_approval_hash") is None
             or profile.get("durationMs") not in {5_000, 10_000, 15_000}
@@ -945,6 +942,192 @@ def _h3_profile_hash(profile: dict[str, Any]) -> str:
     )
 
 
+def _h3_catalog(*, include_retired: bool = False) -> dict[str, dict[str, Any]]:
+    """Load the operator-pinned checkpoint catalogue, never miner-supplied data."""
+    source = read_json(Path(os.environ.get("H3_CHECKPOINT_CATALOG_FILE", _H3_CATALOG_PATH)))
+    if (
+        set(source) != {"schema", "version", "definitions", "publication"}
+        or source["schema"] != "attelier/h3-checkpoint-catalog/v1"
+        or not isinstance(source["version"], str)
+        or not isinstance(source["definitions"], list)
+        or not isinstance(source["publication"], list)
+    ):
+        _fail("checkpoint_catalog")
+    definitions: dict[str, dict[str, Any]] = {}
+    for checkpoint in source["definitions"]:
+        if (
+            not isinstance(checkpoint, dict)
+            or set(checkpoint)
+            != {
+                "schema",
+                "id",
+                "version",
+                "publisher",
+                "repository",
+                "revision",
+                "precision",
+                "runtime",
+                "files",
+            }
+            or checkpoint.get("schema") != "attelier/h3-checkpoint-manifest/v2"
+        ):
+            _fail("checkpoint_catalog")
+        checkpoint_id = _identifier(checkpoint.get("id"), "checkpoint_catalog")
+        precision, files, runtime = (
+            checkpoint.get("precision"),
+            checkpoint.get("files"),
+            checkpoint.get("runtime"),
+        )
+        if (
+            checkpoint_id in definitions
+            or not isinstance(checkpoint.get("version"), str)
+            or not all(
+                isinstance(checkpoint.get(key), str) and checkpoint[key]
+                for key in ("publisher", "repository", "revision")
+            )
+            or not isinstance(precision, dict)
+            or set(precision) != {"transformer", "textEncoder", "videoVae", "audioVae"}
+            or precision.get("transformer") not in {"bf16", "nvfp4"}
+            or precision.get("textEncoder") not in {"bf16", "nvfp4_awq"}
+            or precision.get("videoVae") != "fp16"
+            or precision.get("audioVae") != "fp32"
+            or not isinstance(runtime, dict)
+            or set(runtime) != {"kind", "comfyRepository", "comfyRevision", "loader", "memoryMode"}
+            or runtime.get("kind") != "comfyui"
+            or runtime.get("loader") != "native"
+            or runtime.get("memoryMode") != "operator-selected"
+            or not all(
+                isinstance(runtime.get(key), str) and runtime[key]
+                for key in ("comfyRepository", "comfyRevision")
+            )
+            or not isinstance(files, list)
+            or len(files) != 4
+        ):
+            _fail("checkpoint_catalog")
+        roles: set[str] = set()
+        for item in files:
+            if (
+                not isinstance(item, dict)
+                or set(item) != {"role", "filename", "destination", "sha256", "bytes"}
+                or item.get("role")
+                not in {"diffusion_model", "text_encoder", "video_vae", "audio_vae"}
+                or item["role"] in roles
+                or not all(
+                    isinstance(item.get(key), str) and item[key]
+                    for key in ("filename", "destination")
+                )
+                or _hash(item.get("sha256"), "checkpoint_catalog") is None
+                or type(item.get("bytes")) is not int
+                or item["bytes"] <= 0
+            ):
+                _fail("checkpoint_catalog")
+            roles.add(item["role"])
+        immutable = {
+            "schema": checkpoint["schema"],
+            "id": checkpoint_id,
+            "version": checkpoint["version"],
+            "publisher": checkpoint["publisher"],
+            "repository": checkpoint["repository"],
+            "revision": checkpoint["revision"],
+            "precision": precision,
+            "files": files,
+        }
+        definitions[checkpoint_id] = {
+            "id": checkpoint_id,
+            "version": checkpoint["version"],
+            "manifestHash": digest(immutable),
+        }
+    checkpoints: dict[str, dict[str, Any]] = {}
+    for publication in source["publication"]:
+        if (
+            not isinstance(publication, dict)
+            or set(publication) not in ({"id", "status"}, {"id", "status", "legacy"})
+            or publication.get("legacy") is not None
+            and publication.get("legacy") is not True
+        ):
+            _fail("checkpoint_catalog")
+        checkpoint_id = _identifier(publication.get("id"), "checkpoint_catalog")
+        if (
+            publication.get("status") not in {"published", "retired"}
+            or checkpoint_id in checkpoints
+        ):
+            _fail("checkpoint_catalog")
+        if checkpoint_id not in definitions:
+            if publication.get("legacy") is True and publication.get("status") == "retired":
+                continue
+            _fail("checkpoint_catalog")
+        if publication.get("status") == "retired" and not include_retired:
+            continue
+        checkpoints[checkpoint_id] = definitions[checkpoint_id]
+    if not checkpoints:
+        _fail("checkpoint_catalog")
+    return checkpoints
+
+
+def _h3_catalog_profile(profile: dict[str, Any], checkpoint: dict[str, Any]) -> tuple[str, str]:
+    """Mirror API h3-profiles.ts v2 identity exactly; calibration is excluded."""
+    duration = profile["durationMs"] // 1_000
+    landscape = {"480p": (832, 480), "768p": (1344, 768), "1080p": (1920, 1080)}[
+        profile["resolution"]
+    ]
+    width, height = landscape if profile["aspectRatio"] == "16:9" else landscape[::-1]
+    native_frames = duration * 24 + (5 - duration * 24 % 17 + 17) % 17
+    checkpoint_ref = {
+        "id": checkpoint["id"],
+        "version": checkpoint["version"],
+        "manifestHash": checkpoint["manifestHash"],
+        "catalogId": checkpoint["id"],
+    }
+    identity = {
+        "schema": "attelier/h3-service-profile/v2",
+        "checkpoint": checkpoint_ref,
+        "durationMs": profile["durationMs"],
+        "resolution": profile["resolution"],
+        "aspectRatio": profile["aspectRatio"],
+        "width": width,
+        "height": height,
+        "nativeFrames": native_frames,
+        "fps": 24,
+        "audio": True,
+        "steps": 20,
+        "sampler": "res_multistep",
+        "scheduler": "simple",
+        "profile": "base",
+        "lora": None,
+    }
+    profile_id = (
+        f"h3-{checkpoint['id']}-{duration}s-{profile['resolution']}-"
+        f"{profile['aspectRatio'].replace(':', 'x')}-20-v1"
+    )
+    return profile_id, digest(identity)
+
+
+def _matches_h3_catalog_profile(profile: dict[str, Any], checkpoint: dict[str, Any]) -> bool:
+    try:
+        expected_id, expected_hash = _h3_catalog_profile(profile, checkpoint)
+    except (KeyError, TypeError):
+        return False
+    return profile.get("id") == expected_id and profile.get("hash") == expected_hash
+
+
+def _approved_h3_profile_identity(profile: dict[str, Any]) -> tuple[str, str] | None:
+    """Accept only the frozen legacy identity or a bundled catalog identity."""
+    try:
+        legacy = (
+            f"h3-base-{profile['durationMs'] // 1_000}s-{profile['resolution']}-"
+            f"{profile['aspectRatio'].replace(':', 'x')}-20-v1",
+            _h3_profile_hash(profile),
+        )
+        if profile.get("id") == legacy[0] and profile.get("hash") == legacy[1]:
+            return legacy
+        for checkpoint in _h3_catalog(include_retired=True).values():
+            if _matches_h3_catalog_profile(profile, checkpoint):
+                return _h3_catalog_profile(profile, checkpoint)
+    except (KeyError, TypeError):
+        return None
+    return None
+
+
 def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
     required = {
         "schema",
@@ -961,12 +1144,26 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
         "serviceProfile",
     }
     v2 = config.get("schema") == "attelier/subnet-h3/v2"
+    v3 = config.get("schema") == "attelier/subnet-h3/v3"
     required_v2 = required | {"serviceProfiles"}
-    optional = {"requireFrozenLightWindow"}
+    required_v3 = required_v2 | {"checkpointId"}
+    optional = {"requireFrozenLightWindow", "routingAdmission"}
     if (
-        set(config) != (required_v2 | optional if v2 else required)
-        and set(config) != (required_v2 if v2 else required | optional)
-    ) or config.get("schema") not in {"attelier/subnet-h3/v1", "attelier/subnet-h3/v2"}:
+        set(config)
+        != (
+            required_v3 | optional
+            if v3
+            else required_v2 | {"requireFrozenLightWindow"}
+            if v2
+            else required
+        )
+        and set(config)
+        != (required_v3 if v3 else required_v2 if v2 else required | {"requireFrozenLightWindow"})
+    ) or config.get("schema") not in {
+        "attelier/subnet-h3/v1",
+        "attelier/subnet-h3/v2",
+        "attelier/subnet-h3/v3",
+    }:
         _fail("prelaunch_config_schema")
     _namespace(config, str(config["schema"]), "prelaunch_config_namespace")
     if (
@@ -984,7 +1181,15 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
     ):
         _fail("prelaunch_config")
     approved: set[str] = set()
-    if v2:
+    checkpoint = None
+    if v3:
+        checkpoint = _h3_catalog().get(config.get("checkpointId"))
+        if checkpoint is None or config.get("routingAdmission", "bootstrap") not in {
+            "bootstrap",
+            "strict",
+        }:
+            _fail("prelaunch_config_checkpoint")
+    if v2 or v3:
         if (
             config.get("requireFrozenLightWindow") is not True
             or not isinstance(config.get("serviceProfiles"), list)
@@ -1009,7 +1214,12 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
                     "approvalHash",
                 }
                 or _identifier(value.get("id"), "prelaunch_config_profile") in approved
-                or _hash(value.get("hash"), "prelaunch_config_profile") != _h3_profile_hash(value)
+                or (v3 and not _matches_h3_catalog_profile(value, checkpoint))
+                or (
+                    not v3
+                    and _hash(value.get("hash"), "prelaunch_config_profile")
+                    != _h3_profile_hash(value)
+                )
                 or value.get("rewardBasis") not in {"reference_gpu", "pixel_frames"}
                 or _hash(value.get("approvalHash"), "prelaunch_config_profile") is None
                 or value.get("durationMs") not in {5_000, 10_000, 15_000}
@@ -1055,7 +1265,7 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
         _hotkey(miner["hotkey"], "prelaunch_config_miner")
         _identifier(miner["workerId"], "prelaunch_config_miner")
         reviewed = _integer(miner["operatorReviewedExpires"], "prelaunch_config_review")
-        if v2:
+        if v2 or v3:
             ids = miner.get("profileIds")
             if (
                 not isinstance(ids, list)

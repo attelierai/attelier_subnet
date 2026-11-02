@@ -530,6 +530,117 @@ def test_prelaunch_registry_cli_accepts_v2_profile_bound_workers(tmp_path):
     assert result.returncode != 0 and "prelaunch_config_miner" in result.stderr
 
 
+def test_prelaunch_registry_cli_accepts_catalog_bound_v3_profiles(tmp_path):
+    from forge.inference.prelaunch import _h3_catalog, _h3_catalog_profile
+
+    config, snapshot = registry_inputs()
+    checkpoint = _h3_catalog()["minimax-h3-fl2va-bf16-v1"]
+    profile = {
+        "durationMs": 5000,
+        "resolution": "480p",
+        "aspectRatio": "16:9",
+        "maxJobSeconds": 600,
+        "maxTtvMs": 600000,
+        "rewardWorkUnits": 1000,
+        "rewardBasis": "pixel_frames",
+        "approvalHash": "d" * 64,
+    }
+    profile["id"], profile["hash"] = _h3_catalog_profile(profile, checkpoint)
+    config.update(
+        schema="attelier/subnet-h3/v3",
+        checkpointId=checkpoint["id"],
+        routingAdmission="bootstrap",
+        requireFrozenLightWindow=True,
+        serviceProfiles=[profile],
+        serviceProfile={"id": profile["id"], "hash": profile["hash"]},
+    )
+    config["miners"][0]["profileIds"] = [profile["id"]]
+    result, out, _, _ = run_registry_cli(tmp_path, config, snapshot)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(out.read_text())["workers"]["fixture-owner"]["hotkey"] == OWNER_HOTKEY
+    config["checkpointId"] = "unknown-checkpoint"
+    result, _, _, _ = run_registry_cli(tmp_path, config, snapshot)
+    assert result.returncode != 0 and "prelaunch_config_checkpoint" in result.stderr
+
+
+def test_existing_v2_reward_ledger_accepts_a_catalog_profile_without_rewriting_it(tmp_path):
+    from forge.inference.prelaunch import _h3_catalog, _h3_catalog_profile
+
+    _, _, registry = inputs()
+    checkpoint = _h3_catalog()["minimax-h3-fl2va-bf16-v1"]
+    profile = {
+        "durationMs": 5000,
+        "resolution": "480p",
+        "aspectRatio": "16:9",
+        "maxJobSeconds": 600,
+        "maxTtvMs": 600000,
+        "rewardWorkUnits": 1000,
+        "rewardBasis": "pixel_frames",
+        "approvalHash": "d" * 64,
+    }
+    profile["id"], profile["hash"] = _h3_catalog_profile(profile, checkpoint)
+    policy = {
+        "schema": "attelier/prelaunch-policy/v2",
+        "network": "finney",
+        "genesis": GENESIS,
+        "netuid": 126,
+        "mechanism": 0,
+        "windowMs": HOUR_MS,
+        "gatewayPolicy": {
+            "minSuccessBps": 0,
+            "rewardEligibility": "per_job",
+            "serviceProfiles": [profile],
+        },
+        "workers": [
+            {
+                "minerHotkey": OWNER_HOTKEY,
+                "workerId": "fixture-owner-worker",
+                "trustMode": "operator_whitelist",
+                "profileIds": [profile["id"]],
+            }
+        ],
+        "simulation": {
+            "serviceBudgetBps": 500,
+            "targetVideosPerDay": 240,
+            "nominalMinerEmissionRaoPerDay": "2952000000000",
+            "allocationMode": "fixed",
+        },
+    }
+    aggregate = {
+        "minerHotkey": OWNER_HOTKEY,
+        "workerId": "fixture-owner-worker",
+        "trustMode": "operator_whitelist",
+        "profileId": profile["id"],
+        "profileHash": profile["hash"],
+        "attempted": 1,
+        "succeeded": 1,
+        "failed": 0,
+        "cancelled": 0,
+        "inconclusive": 0,
+        "completedVideoMs": 5000,
+        "eligibleSucceeded": 1,
+        "eligibleVideoMs": 5000,
+        "slowSucceeded": 0,
+        "eligibleWorkUnits": 1000,
+    }
+    ledger = {
+        "schema": "attelier/prelaunch-ledger/v2",
+        "network": "finney",
+        "genesis": GENESIS,
+        "netuid": 126,
+        "mechanism": 0,
+        "window": {"startMs": HOUR_MS, "endMs": 2 * HOUR_MS},
+        "sequence": 1,
+        "closedAtMs": 2 * HOUR_MS + 1,
+        "policyHash": digest(policy),
+        "gatewayPolicyHash": digest(policy["gatewayPolicy"]),
+        "workerPoolHash": digest(policy["workers"]),
+        "aggregates": [aggregate],
+    }
+    result = run_cli(tmp_path, ledger, policy, registry)
+    assert result.returncode == 0, result.stderr
+
+
 def test_prelaunch_registry_cli_fails_closed_for_expired_or_wrong_finalized_snapshot(tmp_path):
     config, snapshot = registry_inputs(reviewed_expires=1)
     result, _, _, _ = run_registry_cli(tmp_path, config, snapshot)

@@ -60,6 +60,18 @@ whose configured identity and review expiry match that snapshot. A local
 `--chain-snapshot` fixture exercises the projection code but does not establish
 current chain state.
 
+## Checkpoint catalog profiles
+
+`attelier/subnet-h3/v3` configurations bind every profile to a published,
+operator-owned checkpoint from `src/forge/inference/h3-checkpoint-catalog.json`.
+The validator recomputes the immutable artifact-manifest hash and the same
+service-profile-v2 identity used by the gateway; it never accepts a miner
+checkpoint claim. Set `H3_CHECKPOINT_CATALOG_FILE` only to a reviewed native
+catalog snapshot with the same schema when publishing a newer catalog release.
+New v3 selections require a published checkpoint. Frozen v2 policy receipts may
+still validate a catalog identity that has since been retired, so withdrawal
+does not reinterpret history.
+
 ## Closed-ledger simulation
 
 ```sh

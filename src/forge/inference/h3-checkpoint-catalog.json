@@ -1,0 +1,26 @@
+{
+  "schema": "attelier/h3-checkpoint-catalog/v1",
+  "version": "2026-11-02",
+  "definitions": [
+    {
+      "schema": "attelier/h3-checkpoint-manifest/v2",
+      "id": "minimax-h3-fl2va-bf16-v1",
+      "version": "h3-fl2va-bf16-v1",
+      "publisher": "Comfy-Org",
+      "repository": "Comfy-Org/MiniMax-H3",
+      "revision": "912b6e38b2092ec4d2e86d24183e0d59ea059d48",
+      "precision": { "transformer": "bf16", "textEncoder": "bf16", "videoVae": "fp16", "audioVae": "fp32" },
+      "runtime": { "kind": "comfyui", "comfyRepository": "https://github.com/Comfy-Org/ComfyUI.git", "comfyRevision": "b0f4b7b294ce482a2e071d9d762c133d38c7aa07", "loader": "native", "memoryMode": "operator-selected" },
+      "files": [
+        { "role": "diffusion_model", "filename": "diffusion_models/minimax_h3_fl2va_bf16.safetensors", "destination": "diffusion_models/minimax_h3_fl2va_bf16.safetensors", "sha256": "907d4add438438ec1544f5240c3b38532ed934fe6be75677a6bbda2a6fdd6182", "bytes": 66280487368 },
+        { "role": "text_encoder", "filename": "text_encoders/qwen3vl_32b_minimax_h3_bf16.safetensors", "destination": "text_encoders/qwen3vl_32b_minimax_h3_bf16.safetensors", "sha256": "600d567f6a9629c8574e8e7041b199bdd9c59a986afa7906910a81919610607d", "bytes": 51506295256 },
+        { "role": "video_vae", "filename": "vae/minimax_h3_video_vae_fp16.safetensors", "destination": "vae/minimax_h3_video_vae_fp16.safetensors", "sha256": "7c1f131492e7eddacaac9069a61b81bdd39de5cc96561e677c5eab1cdce5e522", "bytes": 5207808496 },
+        { "role": "audio_vae", "filename": "vae/minimax_h3_audio_vae_fp32.safetensors", "destination": "vae/minimax_h3_audio_vae_fp32.safetensors", "sha256": "8e505d95dd1561d47abd43d4238fd40d9bb1ae9e147ed0a4cba778d76ae4db48", "bytes": 605254808 }
+      ]
+    }
+  ],
+  "publication": [
+    { "id": "minimax-h3-fl2va-bf16-v1", "status": "published" },
+    { "id": "minimax-h3-fl2va-pruned-nvfp4-v1", "status": "retired", "legacy": true }
+  ]
+}

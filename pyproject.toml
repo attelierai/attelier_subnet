@@ -51,7 +51,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "forge.chain" = ["runtime_reviews/*.json"]
-"forge.inference" = ["defaults.json"]
+"forge.inference" = ["defaults.json", "h3-checkpoint-catalog.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
