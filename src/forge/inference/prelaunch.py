@@ -1412,9 +1412,10 @@ def project_prelaunch_registry(
         "finalizedBlockHash": observed["blockHash"],
         "subnetOwnerColdkey": subnet_owner,
         "miners": [
-            {"uid": miner["uid"], "hotkey": miner["hotkey"], "coldkey": owners[miner["uid"]][1]}
-            for miner in miners
-            if miner["id"] in workers
+            {"uid": uid, "hotkey": owners[uid][0], "coldkey": owners[uid][1]}
+            for uid in dict.fromkeys(
+                miner["uid"] for miner in miners if miner["id"] in workers
+            )
         ],
     }
     return registry, simulation

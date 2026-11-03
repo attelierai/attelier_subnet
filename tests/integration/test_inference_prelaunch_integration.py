@@ -563,6 +563,13 @@ def test_prelaunch_registry_cli_accepts_catalog_bound_v3_profiles(tmp_path):
     result, out, _, _ = run_registry_cli(tmp_path, config, snapshot)
     assert result.returncode == 0, result.stderr
     assert json.loads(out.read_text())["workers"]["fixture-owner"]["hotkey"] == OWNER_HOTKEY
+    second = dict(config["miners"][0], id="fixture-second", workerId="fixture-worker-second")
+    config["miners"].append(second)
+    result, out, simulation, _ = run_registry_cli(tmp_path, config, snapshot)
+    assert result.returncode == 0, result.stderr
+    assert len(json.loads(out.read_text())["workers"]) == 2
+    assert len(json.loads(simulation.read_text())["miners"]) == 1
+    config["miners"].pop()
     review = config["miners"][0]["operatorReviewedExpires"]
     config["miners"][0]["operatorReviewedExpires"] = 1
     result, out, _, _ = run_registry_cli(tmp_path, config, snapshot)
