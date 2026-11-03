@@ -497,6 +497,38 @@ def test_prelaunch_registry_cli_projects_finalized_fixture_and_simulation_regist
     assert result.returncode != 0 and "prelaunch_config" in result.stderr
 
 
+def test_registry_cli_keeps_finalized_weights_separate_from_window_publication(tmp_path):
+    config, snapshot = registry_inputs()
+    observation = {
+        "schema": "attelier/finalized-weights-observation/v1",
+        "status": "observed",
+        "block": snapshot["block"],
+        "hash": snapshot["blockHash"],
+        "observedAt": snapshot["timestamp"],
+        "validatorUid": 3,
+        "runtimeVersion": 486,
+        "validatorHotkey": OWNER_HOTKEY,
+        "lastUpdateBlock": snapshot["block"] - 100,
+        "weightsU16": [[0, 62_258], [4, 3_277]],
+        "incentivesU16": [62_258, 0, 0, 0, 3_277],
+        "windowAttribution": "not_observed",
+    }
+    snapshot["chainObservation"] = observation
+    result, _, _, dashboard = run_registry_cli(tmp_path, config, snapshot)
+    assert result.returncode == 0, result.stderr
+    projected = json.loads(dashboard.read_text())
+    assert projected["weightsStatus"] == "observed"
+    assert projected["weightsBlock"] == snapshot["block"]
+    assert projected["runtime"] == 486
+    assert projected["weightsObservation"] == observation
+    observation["block"] -= 1
+    result, out, _, dashboard = run_registry_cli(tmp_path, config, snapshot)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(out.read_text())["block"] == snapshot["block"]
+    assert json.loads(dashboard.read_text())["weightsStatus"] == "observation_unavailable"
+    assert "weightsObservation" not in json.loads(dashboard.read_text())
+
+
 def test_prelaunch_registry_cli_accepts_v2_profile_bound_workers(tmp_path):
     from forge.inference.prelaunch import _h3_profile_hash
 

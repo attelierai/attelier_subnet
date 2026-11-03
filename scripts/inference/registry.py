@@ -14,7 +14,7 @@ from typing import Any
 from forge.inference.prelaunch import project_prelaunch_registry, read_json
 
 
-def live_prelaunch_snapshot() -> dict[str, Any]:
+def live_prelaunch_snapshot(weights_validator_uid: int | None = None) -> dict[str, Any]:
     """Read one finalized Finney SN126 snapshot; no wallet or mutation path exists."""
     from bittensor import storage
 
@@ -33,7 +33,7 @@ def live_prelaunch_snapshot() -> dict[str, Any]:
             return getattr(value, "value", value)
 
         owners = chain.owner_snapshot(block)
-        return {
+        snapshot = {
             "schema": "forge/inference-registry-snapshot/v1",
             "network": "finney",
             "genesis": genesis,
@@ -50,6 +50,35 @@ def live_prelaunch_snapshot() -> dict[str, Any]:
                 for uid, (hotkey, coldkey) in owners.items()
             },
         }
+        if weights_validator_uid is not None:
+            # Optional observation must not stop identity/registration refresh.
+            # All values share the registry's finalized block. LastUpdate can be
+            # the commit block; this does not attribute a reveal to any feed.
+            try:
+                weights = at.query(storage.SubtensorModule.Weights, [126, weights_validator_uid])
+                weights = getattr(weights, "value", weights)
+                incentives = query("Incentive")
+                updates = query("LastUpdate")
+                runtime = chain.subtensor._call(
+                    raw.rpc_request("state_getRuntimeVersion", [block_hash])
+                )
+                snapshot["chainObservation"] = {
+                    "schema": "attelier/finalized-weights-observation/v1",
+                    "status": "observed",
+                    "block": block,
+                    "hash": block_hash,
+                    "observedAt": snapshot["timestamp"],
+                    "runtimeVersion": int(runtime["specVersion"]),
+                    "validatorUid": weights_validator_uid,
+                    "validatorHotkey": owners[weights_validator_uid][0],
+                    "lastUpdateBlock": int(updates[weights_validator_uid]),
+                    "weightsU16": [[int(uid), int(weight)] for uid, weight in weights],
+                    "incentivesU16": [int(value) for value in incentives],
+                    "windowAttribution": "not_observed",
+                }
+            except Exception:
+                snapshot["chainObservation"] = {"status": "unavailable"}
+        return snapshot
     finally:
         chain.close()
 
@@ -83,42 +112,78 @@ def main() -> None:
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--simulation-registry-out", type=Path)
     parser.add_argument("--dashboard-chain-out", type=Path)
+    parser.add_argument("--weights-validator-uid", type=int)
     parser.add_argument(
         "--chain-snapshot", type=Path, help="Local finalized snapshot fixture; never a live proof"
     )
     args = parser.parse_args()
+    if args.weights_validator_uid is not None and not 0 <= args.weights_validator_uid <= 65_535:
+        parser.error("invalid weights validator UID")
     if os.environ.get("H3_SUBNET_MODE") != "prelaunch":
         parser.error("H3_SUBNET_MODE=prelaunch is required")
     snapshot = (
         read_json(args.chain_snapshot, allow_numeric_keys=True)
         if args.chain_snapshot
-        else live_prelaunch_snapshot()
+        else live_prelaunch_snapshot(args.weights_validator_uid)
     )
+    observation = snapshot.pop("chainObservation", None)
     registry, simulation = project_prelaunch_registry(read_json(args.config), snapshot)
     atomic_replace(args.out, registry)
     if args.simulation_registry_out:
         atomic_replace(args.simulation_registry_out, simulation)
     if args.dashboard_chain_out:
-        atomic_replace(
-            args.dashboard_chain_out,
-            {
-                "network": "finney",
-                "netuid": 126,
-                "mechanism": 0,
-                "observedAt": snapshot["timestamp"],
+        dashboard = {
+            "network": "finney",
+            "netuid": 126,
+            "mechanism": 0,
+            "observedAt": snapshot["timestamp"],
+            "block": snapshot["block"],
+            "hash": snapshot["blockHash"],
+            "runtime": None,
+            "mechanismCount": 1,
+            "weightsStatus": "not_observed",
+            "weightsBlock": None,
+            "observedSplit": {
+                "optimization": None,
+                "inference": None,
                 "block": snapshot["block"],
-                "hash": snapshot["blockHash"],
-                "runtime": None,
-                "mechanismCount": 1,
-                "weightsStatus": "not_observed",
-                "weightsBlock": None,
-                "observedSplit": {
-                    "optimization": None,
-                    "inference": None,
-                    "block": snapshot["block"],
-                },
             },
-        )
+        }
+        if observation is not None:
+            valid = (
+                isinstance(observation, dict)
+                and observation.get("schema") == "attelier/finalized-weights-observation/v1"
+                and observation.get("status") == "observed"
+                and observation.get("block") == snapshot["block"]
+                and observation.get("hash") == snapshot["blockHash"]
+                and observation.get("observedAt") == snapshot["timestamp"]
+                and observation.get("windowAttribution") == "not_observed"
+                and isinstance(observation.get("validatorUid"), int)
+                and snapshot["owners"].get(str(observation["validatorUid"]), {}).get("hotkey")
+                == observation.get("validatorHotkey")
+                and isinstance(observation.get("lastUpdateBlock"), int)
+                and 0 <= observation["lastUpdateBlock"] <= snapshot["block"]
+                and isinstance(observation.get("weightsU16"), list)
+                and all(
+                    isinstance(pair, list)
+                    and len(pair) == 2
+                    and all(type(value) is int and 0 <= value <= 65_535 for value in pair)
+                    for pair in observation["weightsU16"]
+                )
+                and isinstance(observation.get("incentivesU16"), list)
+                and all(
+                    type(value) is int and 0 <= value <= 65_535
+                    for value in observation["incentivesU16"]
+                )
+            )
+            dashboard["weightsStatus"] = "observed" if valid else "observation_unavailable"
+            if valid:
+                dashboard["weightsBlock"] = snapshot["block"]
+                dashboard["weightsObservation"] = observation
+                runtime_version = observation.get("runtimeVersion")
+                if type(runtime_version) is int and runtime_version > 0:
+                    dashboard["runtime"] = runtime_version
+        atomic_replace(args.dashboard_chain_out, dashboard)
 
 
 if __name__ == "__main__":

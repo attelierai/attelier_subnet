@@ -20,6 +20,8 @@ LEDGER_SCHEMA = "attelier/prelaunch-ledger/v1"
 POLICY_SCHEMA = "attelier/prelaunch-policy/v1"
 LEDGER_SCHEMA_V2 = "attelier/prelaunch-ledger/v2"
 POLICY_SCHEMA_V2 = "attelier/prelaunch-policy/v2"
+LEDGER_SCHEMA_V3 = "attelier/prelaunch-ledger/v3"
+POLICY_SCHEMA_V3 = "attelier/prelaunch-policy/v3"
 REGISTRY_SCHEMA = "attelier/prelaunch-registry/v1"
 GENESIS = "0x2f0555cc76fc2840a25a6ea3b9637146806f1f44b090c175ffde2a7e5ab36c03"
 DAY_MS = 86_400_000
@@ -829,7 +831,7 @@ def _simulate_v2(
             }
         )
     legacy_ledger = {
-        **ledger,
+        **{key: value for key, value in ledger.items() if key != "admissionPolicies"},
         "schema": LEDGER_SCHEMA,
         "policyHash": digest(legacy_policy),
         "gatewayPolicyHash": digest(legacy_policy["gatewayPolicy"]),
@@ -850,9 +852,215 @@ def _simulate_v2(
     return artifact
 
 
+def _simulate_v3(
+    ledger: dict[str, Any], policy: dict[str, Any], registry: dict[str, Any]
+) -> dict[str, Any]:
+    """Validate completion-window receipts against their admission snapshots.
+
+    A V3 closing policy may have removed a worker/profile after it accepted a
+    job.  The signed admission policy remains the authority for that terminal
+    job; the current policy remains bound by the outer signed feed.
+    """
+    closing = {**policy, "schema": POLICY_SCHEMA_V2}
+    _validate_v2(
+        {
+            "schema": LEDGER_SCHEMA_V2,
+            "network": ledger["network"],
+            "genesis": ledger["genesis"],
+            "netuid": ledger["netuid"],
+            "mechanism": ledger["mechanism"],
+            "window": ledger["window"],
+            "sequence": ledger["sequence"],
+            "closedAtMs": ledger["closedAtMs"],
+            "policyHash": digest(closing),
+            "gatewayPolicyHash": digest(closing["gatewayPolicy"]),
+            "workerPoolHash": digest(closing["workers"]),
+            "aggregates": [],
+        },
+        closing,
+        registry,
+    )
+    if set(ledger) != {
+        "schema",
+        "network",
+        "genesis",
+        "netuid",
+        "mechanism",
+        "window",
+        "sequence",
+        "closedAtMs",
+        "policyHash",
+        "gatewayPolicyHash",
+        "workerPoolHash",
+        "admissionPolicies",
+        "aggregates",
+    }:
+        _fail("ledger_schema")
+    _namespace(ledger, LEDGER_SCHEMA_V3, "ledger_namespace")
+    if (
+        ledger.get("policyHash") != digest(policy)
+        or ledger.get("gatewayPolicyHash") != digest(policy["gatewayPolicy"])
+        or ledger.get("workerPoolHash") != digest(policy["workers"])
+    ):
+        _fail("ledger_policy_hash")
+    admissions: dict[str, dict[str, Any]] = {}
+    if not isinstance(ledger["admissionPolicies"], list):
+        _fail("ledger_admissions")
+    for item in ledger["admissionPolicies"]:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"policyHash", "policy"}
+            or not isinstance(item.get("policy"), dict)
+        ):
+            _fail("ledger_admission")
+        admitted = item["policy"]
+        if item.get("policyHash") != digest(admitted):
+            _fail("ledger_admission_hash")
+        if admitted.get("schema") not in {POLICY_SCHEMA_V2, POLICY_SCHEMA_V3}:
+            _fail("ledger_admission_schema")
+        accepted = {**admitted, "schema": POLICY_SCHEMA_V2}
+        _validate_v2(
+            {
+                "schema": LEDGER_SCHEMA_V2,
+                "network": "finney",
+                "genesis": GENESIS,
+                "netuid": 126,
+                "mechanism": 0,
+                "window": {"startMs": 0, "endMs": HOUR_MS},
+                "sequence": 1,
+                "closedAtMs": HOUR_MS,
+                "policyHash": digest(accepted),
+                "gatewayPolicyHash": digest(accepted["gatewayPolicy"]),
+                "workerPoolHash": digest(accepted["workers"]),
+                "aggregates": [],
+            },
+            accepted,
+            registry,
+        )
+        if item["policyHash"] in admissions:
+            _fail("ledger_admission_duplicate")
+        admissions[item["policyHash"]] = accepted
+    rows_by_policy: dict[str, list[dict[str, Any]]] = {}
+    for row in ledger["aggregates"]:
+        if not isinstance(row, dict) or "admissionPolicyHash" not in row:
+            _fail("ledger_aggregate_schema")
+        admitted = admissions.get(row["admissionPolicyHash"])
+        if not admitted:
+            _fail("ledger_admission_binding")
+        profile = next(
+            (
+                p
+                for p in admitted["gatewayPolicy"]["serviceProfiles"]
+                if p["id"] == row.get("profileId")
+            ),
+            None,
+        )
+        worker = next(
+            (
+                w
+                for w in admitted["workers"]
+                if w["minerHotkey"] == row.get("minerHotkey")
+                and w["workerId"] == row.get("workerId")
+            ),
+            None,
+        )
+        if (
+            not profile
+            or row.get("profileHash") != profile["hash"]
+            or not worker
+            or row.get("profileId") not in worker["profileIds"]
+        ):
+            _fail("ledger_admission_binding")
+        clean = {k: v for k, v in row.items() if k != "admissionPolicyHash"}
+        rows_by_policy.setdefault(row["admissionPolicyHash"], []).append(clean)
+    videos: dict[str, int] = {}
+    units: dict[str, int] = {}
+    for policy_hash, rows in rows_by_policy.items():
+        admitted = admissions[policy_hash]
+        subset = {
+            "schema": LEDGER_SCHEMA_V2,
+            "network": "finney",
+            "genesis": GENESIS,
+            "netuid": 126,
+            "mechanism": 0,
+            "window": ledger["window"],
+            "sequence": ledger["sequence"],
+            "closedAtMs": ledger["closedAtMs"],
+            "policyHash": digest(admitted),
+            "gatewayPolicyHash": digest(admitted["gatewayPolicy"]),
+            "workerPoolHash": digest(admitted["workers"]),
+            "aggregates": rows,
+        }
+        part_videos, part_units, _ = _validate_v2(subset, admitted, registry)
+        for hotkey, value in part_videos.items():
+            videos[hotkey] = _safe_derived(videos.get(hotkey, 0) + value, "derived_eligible_videos")
+        for hotkey, value in part_units.items():
+            units[hotkey] = _safe_derived(units.get(hotkey, 0) + value, "derived_eligible_units")
+    # Reuse the established allocator once, with the exact globally summed work
+    # units.  Never allocate 5% independently per admission snapshot.
+    legacy_policy = {
+        **closing,
+        "schema": POLICY_SCHEMA,
+        "gatewayPolicy": {
+            "minSuccessBps": 0,
+            "maxTtvMs": 1,
+            "rewardEligibility": "per_job",
+            "serviceProfile": {
+                "id": "legacy",
+                "hash": "0" * 64,
+                "durationMs": 5_000,
+                "resolution": "480p",
+            },
+        },
+        "workers": [
+            {"minerHotkey": hotkey, "workerId": f"carry-{index}", "trustMode": "operator_whitelist"}
+            for index, hotkey in enumerate(sorted(units))
+        ],
+    }
+    aggregates = [
+        {
+            "minerHotkey": hotkey,
+            "workerId": f"carry-{index}",
+            "trustMode": "operator_whitelist",
+            "profileId": "legacy",
+            "profileHash": "0" * 64,
+            "attempted": value,
+            "succeeded": value,
+            "failed": 0,
+            "cancelled": 0,
+            "inconclusive": 0,
+            "completedVideoMs": value * 5_000,
+            "eligibleSucceeded": value,
+            "eligibleVideoMs": value * 5_000,
+            "slowSucceeded": 0,
+        }
+        for index, (hotkey, value) in enumerate(sorted(units.items()))
+    ]
+    legacy_ledger = {
+        **{key: value for key, value in ledger.items() if key != "admissionPolicies"},
+        "schema": LEDGER_SCHEMA,
+        "policyHash": digest(legacy_policy),
+        "gatewayPolicyHash": digest(legacy_policy["gatewayPolicy"]),
+        "workerPoolHash": digest(legacy_policy["workers"]),
+        "aggregates": aggregates,
+    }
+    artifact = _simulate_v1(legacy_ledger, legacy_policy, registry)
+    artifact["input"]["ledgerSha256"] = digest(ledger)
+    artifact["input"]["policySha256"] = ledger["policyHash"]
+    artifact["service"]["eligibleVideos"] = sum(videos.values())
+    artifact["service"]["eligibleWorkUnits"] = sum(units.values())
+    artifact["service"]["rewardMerit"] = "eligibleWorkUnits"
+    for row in artifact["miners"]:
+        row["eligibleVideos"] = videos.get(row["hotkey"], 0)
+        row["eligibleWorkUnits"] = units.get(row["hotkey"], 0)
+    return artifact
+
+
 def simulate(
     ledger: dict[str, Any], policy: dict[str, Any], registry: dict[str, Any]
 ) -> dict[str, Any]:
+    if policy.get("schema") == POLICY_SCHEMA_V3 or ledger.get("schema") == LEDGER_SCHEMA_V3:
+        return _simulate_v3(ledger, policy, registry)
     if policy.get("schema") == POLICY_SCHEMA_V2 or ledger.get("schema") == LEDGER_SCHEMA_V2:
         return _simulate_v2(ledger, policy, registry)
     return _simulate_v1(ledger, policy, registry)
@@ -1150,7 +1358,8 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
     base = required_v3 if v3 else required_v2 if v2 else required
     optional = (
         {"requireFrozenLightWindow", "routingAdmission", "autoProviderAdmission"}
-        if v3 else {"requireFrozenLightWindow"}
+        if v3
+        else {"requireFrozenLightWindow"}
     )
     if not base <= set(config) <= base | optional or config.get("schema") not in {
         "attelier/subnet-h3/v1",
@@ -1171,10 +1380,7 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
             "requireFrozenLightWindow" in config
             and type(config["requireFrozenLightWindow"]) is not bool
         )
-        or (
-            "autoProviderAdmission" in config
-            and type(config["autoProviderAdmission"]) is not bool
-        )
+        or ("autoProviderAdmission" in config and type(config["autoProviderAdmission"]) is not bool)
     ):
         _fail("prelaunch_config")
     approved: set[str] = set()
@@ -1413,9 +1619,7 @@ def project_prelaunch_registry(
         "subnetOwnerColdkey": subnet_owner,
         "miners": [
             {"uid": uid, "hotkey": owners[uid][0], "coldkey": owners[uid][1]}
-            for uid in dict.fromkeys(
-                miner["uid"] for miner in miners if miner["id"] in workers
-            )
+            for uid in dict.fromkeys(miner["uid"] for miner in miners if miner["id"] in workers)
         ],
     }
     return registry, simulation

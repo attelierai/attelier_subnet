@@ -32,6 +32,9 @@ DOMAIN = b"attelier/light-input/v1\0"
 ENVELOPE_SCHEMA_V2 = "attelier/light-feed/v2"
 BODY_SCHEMA_V2 = "attelier/light-input/v2"
 DOMAIN_V2 = b"attelier/light-input/v2\0"
+ENVELOPE_SCHEMA_V3 = "attelier/light-feed/v3"
+BODY_SCHEMA_V3 = "attelier/light-input/v3"
+DOMAIN_V3 = b"attelier/light-input/v3\0"
 MAX_RESPONSE_BYTES = 1_048_576
 MAX_BUDGET_BPS = 1_000
 STATUS_SCHEMA = "attelier/light-status/v1"
@@ -163,6 +166,7 @@ def verify_feed(
     if set(envelope) != {"schema", "keyId", "body", "digest", "signature"} or schema not in {
         ENVELOPE_SCHEMA,
         ENVELOPE_SCHEMA_V2,
+        ENVELOPE_SCHEMA_V3,
     }:
         raise LightError("light_envelope_schema")
     body = envelope.get("body")
@@ -181,8 +185,20 @@ def verify_feed(
         "ledger",
         "registry",
     }
-    expected_body = BODY_SCHEMA_V2 if schema == ENVELOPE_SCHEMA_V2 else BODY_SCHEMA
-    domain = DOMAIN_V2 if schema == ENVELOPE_SCHEMA_V2 else DOMAIN
+    expected_body = (
+        BODY_SCHEMA_V3
+        if schema == ENVELOPE_SCHEMA_V3
+        else BODY_SCHEMA_V2
+        if schema == ENVELOPE_SCHEMA_V2
+        else BODY_SCHEMA
+    )
+    domain = (
+        DOMAIN_V3
+        if schema == ENVELOPE_SCHEMA_V3
+        else DOMAIN_V2
+        if schema == ENVELOPE_SCHEMA_V2
+        else DOMAIN
+    )
     if set(body) != required or body.get("schema") != expected_body:
         raise LightError("light_body_schema")
     if (
