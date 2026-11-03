@@ -629,6 +629,51 @@ def test_prelaunch_registry_cli_accepts_catalog_bound_v3_profiles(tmp_path):
     assert result.returncode != 0 and "prelaunch_config_checkpoint" in result.stderr
 
 
+def test_prelaunch_registry_cli_accepts_strict_additive_v4_quality_on_v3_profile(tmp_path):
+    from forge.inference.prelaunch import _h3_catalog, _h3_catalog_profile
+
+    config, snapshot = registry_inputs()
+    checkpoint = _h3_catalog()["minimax-h3-fl2va-bf16-v1"]
+    profile = {
+        "durationMs": 5000,
+        "resolution": "480p",
+        "aspectRatio": "16:9",
+        "maxJobSeconds": 600,
+        "maxTtvMs": 600000,
+        "rewardWorkUnits": 1000,
+        "rewardBasis": "pixel_frames",
+        "approvalHash": "d" * 64,
+    }
+    profile["id"], profile["hash"] = _h3_catalog_profile(profile, checkpoint)
+    profile["quality"] = {
+        "schema": "attelier/h3-quality/v1",
+        "minimumOutcomes": 1,
+        "minimumSuccessBps": 9500,
+        "minimumObservationMs": 0,
+        "evidenceWindowMs": 604800000,
+        "cooldownMs": 900000,
+        "durationToleranceMs": 150,
+        "minimumVisualScoreBps": None,
+        "calibrationStatus": "measured",
+        "referenceJobId": None,
+    }
+    config.update(
+        schema="attelier/subnet-h3/v3",
+        checkpointId=checkpoint["id"],
+        requireFrozenLightWindow=True,
+        serviceProfiles=[profile],
+        serviceProfile={"id": profile["id"], "hash": profile["hash"]},
+    )
+    config["miners"][0]["profileIds"] = [profile["id"]]
+    result, out, _, _ = run_registry_cli(tmp_path, config, snapshot)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(out.read_text())["workers"]["fixture-owner"]["hotkey"] == OWNER_HOTKEY
+
+    config["serviceProfiles"][0]["quality"]["minimumObservationMs"] = -1
+    invalid, _, _, _ = run_registry_cli(tmp_path, config, snapshot)
+    assert invalid.returncode != 0 and "prelaunch_config_profiles" in invalid.stderr
+
+
 def test_existing_v2_reward_ledger_accepts_a_catalog_profile_without_rewriting_it(tmp_path):
     from forge.inference.prelaunch import _h3_catalog, _h3_catalog_profile
 
@@ -705,6 +750,148 @@ def test_existing_v2_reward_ledger_accepts_a_catalog_profile_without_rewriting_i
     }
     result = run_cli(tmp_path, ledger, policy, registry)
     assert result.returncode == 0, result.stderr
+
+
+def test_v4_frozen_bids_discount_the_fixed_service_pool_and_leave_residual_burn(tmp_path):
+    from forge.inference.prelaunch import _h3_catalog, _h3_catalog_profile
+
+    _, _, registry = inputs()
+    checkpoint = _h3_catalog()["minimax-h3-fl2va-bf16-v1"]
+    profile = {
+        "durationMs": 5000,
+        "resolution": "480p",
+        "aspectRatio": "16:9",
+        "maxJobSeconds": 600,
+        "maxTtvMs": 600000,
+        "rewardWorkUnits": 1000,
+        "rewardBasis": "pixel_frames",
+        "approvalHash": "d" * 64,
+    }
+    profile["id"], profile["hash"] = _h3_catalog_profile(profile, checkpoint)
+    profile["quality"] = {
+        "schema": "attelier/h3-quality/v1",
+        "minimumOutcomes": 1,
+        "minimumSuccessBps": 9500,
+        "minimumObservationMs": 0,
+        "evidenceWindowMs": 604800000,
+        "cooldownMs": 900000,
+        "durationToleranceMs": 150,
+        "minimumVisualScoreBps": None,
+        "calibrationStatus": "measured",
+        "referenceJobId": None,
+    }
+    workers = [
+        {
+            "minerHotkey": OWNER_HOTKEY,
+            "workerId": "fixture-owner-worker",
+            "trustMode": "operator_whitelist",
+            "profileIds": [profile["id"]],
+        },
+        {
+            "minerHotkey": OTHER,
+            "workerId": "other-worker",
+            "trustMode": "operator_whitelist",
+            "profileIds": [profile["id"]],
+        },
+    ]
+    policy = {
+        "schema": "attelier/prelaunch-policy/v4",
+        "network": "finney",
+        "genesis": GENESIS,
+        "netuid": 126,
+        "mechanism": 0,
+        "windowMs": HOUR_MS,
+        "gatewayPolicy": {
+            "minSuccessBps": 0,
+            "rewardEligibility": "per_job",
+            "serviceProfiles": [profile],
+        },
+        "workers": workers,
+        "simulation": {
+            "serviceBudgetBps": 500,
+            "targetVideosPerDay": 240,
+            "nominalMinerEmissionRaoPerDay": "2952000000000",
+            "allocationMode": "fixed",
+        },
+    }
+
+    def aggregate(hotkey, worker, bps):
+        return {
+            "minerHotkey": hotkey,
+            "workerId": worker,
+            "trustMode": "operator_whitelist",
+            "profileId": profile["id"],
+            "profileHash": profile["hash"],
+            "admissionPolicyHash": digest(policy),
+            "remunerationBps": bps,
+            "attempted": 1,
+            "succeeded": 1,
+            "failed": 0,
+            "cancelled": 0,
+            "inconclusive": 0,
+            "completedVideoMs": 5000,
+            "eligibleSucceeded": 1,
+            "eligibleVideoMs": 5000,
+            "slowSucceeded": 0,
+            "eligibleWorkUnits": 1000,
+            "eligibleWeightedWorkUnitsBps": 1000 * bps,
+        }
+
+    ledger = {
+        "schema": "attelier/prelaunch-ledger/v4",
+        "network": "finney",
+        "genesis": GENESIS,
+        "netuid": 126,
+        "mechanism": 0,
+        "window": {"startMs": HOUR_MS, "endMs": 2 * HOUR_MS},
+        "sequence": 1,
+        "closedAtMs": 2 * HOUR_MS + 1,
+        "policyHash": digest(policy),
+        "gatewayPolicyHash": digest(policy["gatewayPolicy"]),
+        "workerPoolHash": digest(workers),
+        "admissionPolicies": [{"policyHash": digest(policy), "policy": policy}],
+        "aggregates": [
+            aggregate(OWNER_HOTKEY, "fixture-owner-worker", 6000),
+            aggregate(OTHER, "other-worker", 10000),
+        ],
+    }
+    result = run_cli(tmp_path, ledger, policy, registry)
+    assert result.returncode == 0, result.stderr
+    artifact = json.loads(result.stdout)
+    entries = artifact["unsignedProposedWeights"]["entries"]
+    miner_weights = [entry["weight"] for entry in entries if entry["kind"] == "miner"]
+    burn = next(entry["weight"] for entry in entries if entry["kind"] == "burn")
+    # 5% ceiling is 3276, then 16m weighted / 20m raw = 2620.8 -> 2620.
+    assert sum(miner_weights) == 2620
+    assert burn == 65535 - 2620
+    assert artifact["service"]["eligibleWorkUnits"] == 2000
+    assert artifact["service"]["eligibleWeightedWorkUnitsBps"] == 16_000_000
+    assert artifact["service"]["unusedServiceBudgetToBurn"] is True
+
+    # A one-basis-point bid is not rounded per job: even 1,000 raw units stay
+    # below one integer weight unit and therefore burn, rather than being made
+    # whole from the five-percent ceiling.
+    one_bps = copy.deepcopy(ledger)
+    one_bps["sequence"] = 2
+    one_bps["window"] = {"startMs": 2 * HOUR_MS, "endMs": 3 * HOUR_MS}
+    one_bps["closedAtMs"] = 3 * HOUR_MS + 1
+    one_bps["aggregates"] = [aggregate(OTHER, "other-worker", 1)]
+    result = run_cli(tmp_path, one_bps, policy, registry)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["unsignedProposedWeights"]["entries"] == [
+        {"kind": "burn", "weight": 65535}
+    ]
+
+    zero_eligible = copy.deepcopy(one_bps)
+    zero_eligible["sequence"] = 3
+    zero_eligible["window"] = {"startMs": 3 * HOUR_MS, "endMs": 4 * HOUR_MS}
+    zero_eligible["closedAtMs"] = 4 * HOUR_MS + 1
+    zero_eligible["aggregates"] = []
+    result = run_cli(tmp_path, zero_eligible, policy, registry)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["unsignedProposedWeights"]["entries"] == [
+        {"kind": "burn", "weight": 65535}
+    ]
 
 
 def test_prelaunch_registry_cli_fails_closed_for_expired_or_wrong_finalized_snapshot(tmp_path):

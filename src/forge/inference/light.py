@@ -35,6 +35,9 @@ DOMAIN_V2 = b"attelier/light-input/v2\0"
 ENVELOPE_SCHEMA_V3 = "attelier/light-feed/v3"
 BODY_SCHEMA_V3 = "attelier/light-input/v3"
 DOMAIN_V3 = b"attelier/light-input/v3\0"
+ENVELOPE_SCHEMA_V4 = "attelier/light-feed/v4"
+BODY_SCHEMA_V4 = "attelier/light-input/v4"
+DOMAIN_V4 = b"attelier/light-input/v4\0"
 MAX_RESPONSE_BYTES = 1_048_576
 MAX_BUDGET_BPS = 1_000
 STATUS_SCHEMA = "attelier/light-status/v1"
@@ -167,6 +170,7 @@ def verify_feed(
         ENVELOPE_SCHEMA,
         ENVELOPE_SCHEMA_V2,
         ENVELOPE_SCHEMA_V3,
+        ENVELOPE_SCHEMA_V4,
     }:
         raise LightError("light_envelope_schema")
     body = envelope.get("body")
@@ -186,14 +190,18 @@ def verify_feed(
         "registry",
     }
     expected_body = (
-        BODY_SCHEMA_V3
+        BODY_SCHEMA_V4
+        if schema == ENVELOPE_SCHEMA_V4
+        else BODY_SCHEMA_V3
         if schema == ENVELOPE_SCHEMA_V3
         else BODY_SCHEMA_V2
         if schema == ENVELOPE_SCHEMA_V2
         else BODY_SCHEMA
     )
     domain = (
-        DOMAIN_V3
+        DOMAIN_V4
+        if schema == ENVELOPE_SCHEMA_V4
+        else DOMAIN_V3
         if schema == ENVELOPE_SCHEMA_V3
         else DOMAIN_V2
         if schema == ENVELOPE_SCHEMA_V2

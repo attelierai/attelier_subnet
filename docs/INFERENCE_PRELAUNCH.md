@@ -46,6 +46,37 @@ shadow row has zero expected mining payout. Historical 10% shadow artifacts are
 kept only for reproducible replay. Simulation artifacts themselves are unsigned;
 the live publisher separately validates and submits the calculated vector.
 
+## V4 hourly service auction
+
+`attelier/prelaunch-policy/v4`, `attelier/prelaunch-ledger/v4`, and the signed
+`attelier/light-input/v4` / `attelier/light-feed/v4` keep the same 500 bps (5%)
+service ceiling. They do not promise that the whole ceiling is paid: its unused
+part is burned. A dispatch freezes its integer `remunerationBps` in the range
+1..10,000 alongside its exact checkpoint/duration/resolution/aspect profile.
+It cannot be changed by a later hourly policy or worker update.
+
+For each eligible, timely and custodied exact-profile completion, the ledger
+records both undiscounted `eligibleWorkUnits` and the integer numerator
+`eligibleWeightedWorkUnitsBps = eligibleWorkUnits * remunerationBps`. For a
+closed hour, with `E = 65,535`, raw total `R`, and weighted total `W`, the
+service allocation is `floor(E * 500 / 10,000 * W / (R * 10,000))`. The
+deterministic residual, the 95% non-service share, and a zero-eligible hour all
+burn; discounted work is never renormalized back to 5%. Per-miner allocation is
+the deterministic largest-remainder split of that allocated service amount by
+its weighted numerator. This remains planning/accounting, not a claim of an
+on-chain payout or finalized weight publication.
+
+Admission policy snapshots are sealed with the job. A V4 close accepts terminal
+work admitted under preserved V2, V3, or V4 snapshots and validates the original
+worker/profile binding; historic rows without an explicit frozen bid are
+interpreted only as the legacy 10,000 bps bid. Customer request priority
+(`1`, `0`, `-1`) is gateway scheduling only: it is neither sent to workers nor a
+reward-work multiplier. Quality remains exact-profile policy data and is
+additive: `attelier/h3-quality/v1` records the required outcomes, success rate,
+observation/evidence window, cooldown, duration tolerance, optional visual
+threshold, calibration state, and reference job. It never introduces a GPU
+requirement.
+
 ## Registry projection
 
 Build the read-only registry projection before the simulation:

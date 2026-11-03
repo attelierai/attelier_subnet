@@ -22,6 +22,8 @@ LEDGER_SCHEMA_V2 = "attelier/prelaunch-ledger/v2"
 POLICY_SCHEMA_V2 = "attelier/prelaunch-policy/v2"
 LEDGER_SCHEMA_V3 = "attelier/prelaunch-ledger/v3"
 POLICY_SCHEMA_V3 = "attelier/prelaunch-policy/v3"
+LEDGER_SCHEMA_V4 = "attelier/prelaunch-ledger/v4"
+POLICY_SCHEMA_V4 = "attelier/prelaunch-policy/v4"
 REGISTRY_SCHEMA = "attelier/prelaunch-registry/v1"
 GENESIS = "0x2f0555cc76fc2840a25a6ea3b9637146806f1f44b090c175ffde2a7e5ab36c03"
 DAY_MS = 86_400_000
@@ -1056,9 +1058,250 @@ def _simulate_v3(
     return artifact
 
 
+def _simulate_v4(
+    ledger: dict[str, Any], policy: dict[str, Any], registry: dict[str, Any]
+) -> dict[str, Any]:
+    """V4 reverse-auction merit: raw units define the 5% ceiling and the
+    frozen bid only discounts each miner's share.  Residual stays burn."""
+    if policy.get("schema") != POLICY_SCHEMA_V4 or ledger.get("schema") != LEDGER_SCHEMA_V4:
+        _fail("v4_namespace")
+    gateway = policy.get("gatewayPolicy")
+    if not isinstance(gateway, dict) or not isinstance(gateway.get("serviceProfiles"), list):
+        _fail("v4_policy")
+    # Validate exact quality contracts before reducing the receipts to the V3
+    # admission lineage reader.  V3/V2 policies remain accepted admissions.
+    for profile in gateway["serviceProfiles"]:
+        if not isinstance(profile, dict):
+            _fail("v4_profile")
+        quality = profile.get("quality")
+        required = {
+            "schema",
+            "minimumOutcomes",
+            "minimumSuccessBps",
+            "minimumObservationMs",
+            "evidenceWindowMs",
+            "cooldownMs",
+            "durationToleranceMs",
+            "minimumVisualScoreBps",
+            "calibrationStatus",
+            "referenceJobId",
+        }
+        if (
+            not isinstance(quality, dict)
+            or set(quality) != required
+            or quality.get("schema") != "attelier/h3-quality/v1"
+            or _integer(quality.get("minimumOutcomes"), "v4_quality") < 1
+            or not 0 <= _integer(quality.get("minimumSuccessBps"), "v4_quality") <= 10_000
+            or _integer(quality.get("minimumObservationMs"), "v4_quality") < 0
+            or _integer(quality.get("evidenceWindowMs"), "v4_quality")
+            < quality["minimumObservationMs"]
+            or _integer(quality.get("cooldownMs"), "v4_quality") <= 0
+            or _integer(quality.get("durationToleranceMs"), "v4_quality") > 1_000
+            or quality.get("minimumVisualScoreBps") is not None
+            or quality.get("calibrationStatus") not in {"measured", "pending"}
+            or (
+                quality.get("referenceJobId") is not None
+                and not isinstance(quality.get("referenceJobId"), str)
+            )
+        ):
+            _fail("v4_quality")
+    admissions = ledger.get("admissionPolicies")
+    aggregates = ledger.get("aggregates")
+    if not isinstance(admissions, list) or not isinstance(aggregates, list):
+        _fail("v4_ledger")
+    weighted: dict[str, int] = {}
+    raw: dict[str, int] = {}
+    v3_rows: list[dict[str, Any]] = []
+    for row in aggregates:
+        if not isinstance(row, dict):
+            _fail("v4_aggregate")
+        required = {
+            "minerHotkey",
+            "workerId",
+            "trustMode",
+            "profileId",
+            "profileHash",
+            "admissionPolicyHash",
+            "remunerationBps",
+            "attempted",
+            "succeeded",
+            "failed",
+            "cancelled",
+            "inconclusive",
+            "completedVideoMs",
+            "eligibleSucceeded",
+            "eligibleVideoMs",
+            "slowSucceeded",
+            "eligibleWorkUnits",
+            "eligibleWeightedWorkUnitsBps",
+        }
+        if set(row) != required:
+            _fail("v4_aggregate")
+        bps = _integer(row["remunerationBps"], "v4_bid")
+        units = _integer(row["eligibleWorkUnits"], "v4_units")
+        if (
+            not 1 <= bps <= 10_000
+            or _integer(row["eligibleWeightedWorkUnitsBps"], "v4_weighted") != units * bps
+        ):
+            _fail("v4_bid")
+        hotkey = _hotkey(row["minerHotkey"], "v4_hotkey")
+        raw[hotkey] = _safe_derived(raw.get(hotkey, 0) + units, "v4_raw")
+        weighted[hotkey] = _safe_derived(
+            weighted.get(hotkey, 0) + row["eligibleWeightedWorkUnitsBps"], "v4_weighted"
+        )
+        v3_rows.append(
+            {
+                k: v
+                for k, v in row.items()
+                if k not in {"remunerationBps", "eligibleWeightedWorkUnitsBps"}
+            }
+        )
+
+    # V3 proves all terminal accounting and historic admission lineage.  Strip
+    # only V4 fields and quality to retain V1-V3 semantics unchanged.
+    def downgrade(value: dict[str, Any]) -> dict[str, Any]:
+        gateway_value = value["gatewayPolicy"]
+        return {
+            **value,
+            "schema": POLICY_SCHEMA_V3,
+            "gatewayPolicy": {
+                **gateway_value,
+                "serviceProfiles": [
+                    {k: v for k, v in p.items() if k != "quality"}
+                    for p in gateway_value["serviceProfiles"]
+                ],
+            },
+        }
+
+    closing = downgrade(policy)
+    old_admissions = []
+    for item in admissions:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"policyHash", "policy"}
+            or not isinstance(item["policy"], dict)
+        ):
+            _fail("v4_admission")
+        accepted = item["policy"]
+        if accepted.get("schema") == POLICY_SCHEMA_V4:
+            accepted = downgrade(accepted)
+        if accepted.get("schema") not in {POLICY_SCHEMA_V2, POLICY_SCHEMA_V3}:
+            _fail("v4_admission")
+        # The original hash remains the binding ID; only the reader view is
+        # normalized, so V3 cannot verify its digest. Validate below directly.
+        old_admissions.append({"policyHash": item["policyHash"], "policy": accepted})
+    # Directly require the original admission hashes and use a temporary V3
+    # receipt only for count/media/provenance arithmetic.
+    old_ledger = {
+        **ledger,
+        "schema": LEDGER_SCHEMA_V3,
+        "policyHash": digest(closing),
+        "gatewayPolicyHash": digest(closing["gatewayPolicy"]),
+        "workerPoolHash": digest(closing["workers"]),
+        "admissionPolicies": old_admissions,
+        "aggregates": v3_rows,
+    }
+    # V3 hashes are intentionally incompatible for V4 admission snapshots, so
+    # run its structural path only when all receipts were admitted under V2/V3.
+    if all(item["policy"].get("schema") != POLICY_SCHEMA_V4 for item in admissions):
+        _simulate_v3(old_ledger, closing, registry)
+    else:
+        # V4 admission snapshots are structurally checked above; registration
+        # remains authoritative through the current closing policy/registry.
+        _validate_registry(registry)
+    total_raw = sum(raw.values())
+    total_weighted = sum(weighted.values())
+    # The configured service pool is a fixed 5% ceiling.  It is not made whole
+    # after discounts, and zero valid work therefore remains entirely burn.
+    base_service_weight = WEIGHT_TOTAL * policy["simulation"]["serviceBudgetBps"] // 10_000
+    allocated = base_service_weight * total_weighted // (total_raw * 10_000) if total_raw else 0
+    weights = _largest_remainder(allocated, weighted) if allocated else {}
+    burn = WEIGHT_TOTAL - sum(weights.values())
+    miners = _validate_registry(registry)
+    rows = []
+    nominal = _parse_decimal_rao(policy["simulation"]["nominalMinerEmissionRaoPerDay"])
+    for hotkey in sorted(set(raw) | set(weighted)):
+        miner = miners[hotkey]
+        weight = weights.get(hotkey, 0)
+        quantized = (
+            nominal
+            * int(ledger["window"]["endMs"] - ledger["window"]["startMs"])
+            * weight
+            // (DAY_MS * WEIGHT_TOTAL)
+        )
+        expected = 0 if miner["ownerAssociated"] else quantized
+        rows.append(
+            {
+                "uid": miner["uid"],
+                "hotkey": hotkey,
+                "eligibleWorkUnits": raw.get(hotkey, 0),
+                "eligibleWeightedWorkUnitsBps": weighted.get(hotkey, 0),
+                "proposedWeight": weight,
+                "chainExpectedMinerPayoutRao": str(expected),
+                "ownerAssociated": miner["ownerAssociated"],
+                "requiresExternalConsensus": True,
+            }
+        )
+    window = ledger["window"]
+    return {
+        "schema": SCHEMA,
+        "simulationOnly": True,
+        "publishable": False,
+        "chainCalls": [],
+        "namespace": {"network": "finney", "genesis": GENESIS, "netuid": 126, "mechanism": 0},
+        "asset": {"kind": "alpha", "netuid": 126, "decimals": 9},
+        "input": {
+            "genesis": GENESIS,
+            "ledgerSha256": digest(ledger),
+            "policySha256": ledger["policyHash"],
+            "registrySha256": digest(registry),
+            "gatewayPolicyHash": ledger["gatewayPolicyHash"],
+            "workerPoolHash": ledger["workerPoolHash"],
+            "observedBlock": registry["finalizedBlock"],
+            "observedBlockHash": registry["finalizedBlockHash"],
+            "finalizedRegistryBlock": registry["finalizedBlock"],
+            "finalizedRegistryBlockHash": registry["finalizedBlockHash"],
+        },
+        "createdAtMs": ledger["closedAtMs"],
+        "window": window,
+        "service": {
+            "windowMs": window["endMs"] - window["startMs"],
+            "configuredServiceBudgetBps": policy["simulation"]["serviceBudgetBps"],
+            "eligibleWorkUnits": total_raw,
+            "eligibleWeightedWorkUnitsBps": total_weighted,
+                "rewardMerit": "eligibleWorkUnits*frozenRemunerationBps/10000",
+            "unusedServiceBudgetToBurn": True,
+        },
+        "unsignedProposedWeights": {
+            "total": WEIGHT_TOTAL,
+            "entries": [
+                *[
+                    {
+                        "kind": "miner",
+                        "uid": row["uid"],
+                        "hotkey": row["hotkey"],
+                        "weight": row["proposedWeight"],
+                    }
+                    for row in rows
+                    if row["proposedWeight"]
+                ],
+                {"kind": "burn", "weight": burn},
+            ],
+        },
+        "miners": rows,
+        "assumptions": {
+            "windowMs": window["endMs"] - window["startMs"],
+            "noYumaConsensusSimulation": True,
+            "noTransactionOrSignature": True,
+        },
+    }
+
+
 def simulate(
     ledger: dict[str, Any], policy: dict[str, Any], registry: dict[str, Any]
 ) -> dict[str, Any]:
+    if policy.get("schema") == POLICY_SCHEMA_V4 or ledger.get("schema") == LEDGER_SCHEMA_V4:
+        return _simulate_v4(ledger, policy, registry)
     if policy.get("schema") == POLICY_SCHEMA_V3 or ledger.get("schema") == LEDGER_SCHEMA_V3:
         return _simulate_v3(ledger, policy, registry)
     if policy.get("schema") == POLICY_SCHEMA_V2 or ledger.get("schema") == LEDGER_SCHEMA_V2:
@@ -1336,6 +1579,52 @@ def _approved_h3_profile_identity(profile: dict[str, Any]) -> tuple[str, str] | 
     return None
 
 
+def _valid_h3_quality_v1(value: Any) -> bool:
+    """Validate the additive, exact-profile V4 quality contract.
+
+    It remains optional in the deployed subnet-h3/v3 configuration so frozen
+    legacy profiles keep their original identity.  When present it is strict,
+    matching the signed V4 policy contract before registry projection accepts
+    the configuration.
+    """
+    required = {
+        "schema",
+        "minimumOutcomes",
+        "minimumSuccessBps",
+        "minimumObservationMs",
+        "evidenceWindowMs",
+        "cooldownMs",
+        "durationToleranceMs",
+        "minimumVisualScoreBps",
+        "calibrationStatus",
+        "referenceJobId",
+    }
+    if not isinstance(value, dict) or set(value) != required:
+        return False
+    try:
+        observation = _integer(value["minimumObservationMs"], "prelaunch_config_quality")
+        evidence = _integer(value["evidenceWindowMs"], "prelaunch_config_quality")
+        reference = value["referenceJobId"]
+        return (
+            value["schema"] == "attelier/h3-quality/v1"
+            and 1 <= _integer(value["minimumOutcomes"], "prelaunch_config_quality") <= 10_000
+            and 0 <= _integer(value["minimumSuccessBps"], "prelaunch_config_quality") <= 10_000
+            and observation <= 31 * DAY_MS
+            and observation <= evidence <= 31 * DAY_MS
+            and 1 <= _integer(value["cooldownMs"], "prelaunch_config_quality") <= DAY_MS
+            and 0 <= _integer(value["durationToleranceMs"], "prelaunch_config_quality") <= 1_000
+            and value["minimumVisualScoreBps"] is None
+            and value["calibrationStatus"] in {"measured", "pending"}
+            and (
+                reference is None
+                or isinstance(reference, str)
+                and re.fullmatch(r"[a-fA-F0-9-]{36}", reference) is not None
+            )
+        )
+    except (KeyError, ValueError):
+        return False
+
+
 def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
     required = {
         "schema",
@@ -1413,21 +1702,23 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
         ):
             _fail("prelaunch_config_profiles")
         for value in config["serviceProfiles"]:
+            legacy_fields = {
+                "id",
+                "hash",
+                "durationMs",
+                "resolution",
+                "aspectRatio",
+                "maxJobSeconds",
+                "maxTtvMs",
+                "rewardWorkUnits",
+                "rewardBasis",
+                "approvalHash",
+            }
+            has_quality = "quality" in value if isinstance(value, dict) else False
             if (
                 not isinstance(value, dict)
-                or set(value)
-                != {
-                    "id",
-                    "hash",
-                    "durationMs",
-                    "resolution",
-                    "aspectRatio",
-                    "maxJobSeconds",
-                    "maxTtvMs",
-                    "rewardWorkUnits",
-                    "rewardBasis",
-                    "approvalHash",
-                }
+                or set(value) != legacy_fields | ({"quality"} if has_quality else set())
+                or (has_quality and (not v3 or not _valid_h3_quality_v1(value["quality"])))
                 or _identifier(value.get("id"), "prelaunch_config_profile") in approved
                 or (v3 and not _matches_h3_catalog_profile(value, checkpoint))
                 or (

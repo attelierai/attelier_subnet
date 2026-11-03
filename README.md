@@ -31,15 +31,18 @@ The current live-policy contract uses indefinite one-hour UTC windows. Eligible
 work completed in window W determines accounting for W+1; pending work belongs
 to the window in which it becomes terminal.
 
-The signed fixed policy assigns exactly 5% of the mining pool to eligible work;
-the remaining 95% is burn. An empty signed hourly window is a full burn. A
-missing or unavailable feed after the 10-minute grace is burn for that window;
-the next valid window resumes normally, with no retroactive catch-up. Initial
-network-global synthetic demand is capped at 2 requests/hour while only trial
-workers exist, 5 with ramp capacity, and 10 with active capacity. These are
-network-global caps, not per miner. An owner-associated row has zero expected
-mining payout. Historical daily and 10% shadow artifacts remain replay history,
-not the current live policy.
+The signed V4 policy uses 5% of the mining pool as a service ceiling, not a
+guaranteed allocation. Eligible, timely, custodied exact-profile deliveries earn
+work units; their frozen remuneration bid discounts the service allocation, and
+the deterministic residual burns rather than being normalized back to 5%.
+The remaining non-service share, an empty signed hourly window, or a missing or
+unavailable feed after the 10-minute grace are burn; the next valid window
+resumes normally with no retroactive catch-up. Synthetic demand runs continuously
+and is capped atomically at 90% of healthy compatible capacity, preserving at
+least one fleet slot for organic requests where the fleet has enough slots.
+This is fleet-wide, not a per-miner promise. An owner-associated row has zero
+expected mining payout. Historical daily and 10% shadow artifacts remain replay
+history, not the current live policy.
 
 New signed policies use per-job eligibility: a completion already eligible for
 the configured profile, custody, and TTV contributes on its own. Policies
