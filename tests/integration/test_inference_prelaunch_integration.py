@@ -558,6 +558,28 @@ def test_prelaunch_registry_cli_accepts_catalog_bound_v3_profiles(tmp_path):
     result, out, _, _ = run_registry_cli(tmp_path, config, snapshot)
     assert result.returncode == 0, result.stderr
     assert json.loads(out.read_text())["workers"]["fixture-owner"]["hotkey"] == OWNER_HOTKEY
+    config["autoProviderAdmission"] = True
+    config["miners"][0]["autoManaged"] = True
+    result, out, _, _ = run_registry_cli(tmp_path, config, snapshot)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(out.read_text())["workers"]["fixture-owner"]["hotkey"] == OWNER_HOTKEY
+    review = config["miners"][0]["operatorReviewedExpires"]
+    config["miners"][0]["operatorReviewedExpires"] = 1
+    result, out, _, _ = run_registry_cli(tmp_path, config, snapshot)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(out.read_text())["workers"] == {}
+    assert OWNER_HOTKEY in json.loads(out.read_text())["uids"].values()
+    config["miners"][0]["operatorReviewedExpires"] = review
+    uid = config["miners"][0]["uid"]
+    config["miners"][0]["uid"] = 65535
+    result, out, _, _ = run_registry_cli(tmp_path, config, snapshot)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(out.read_text())["workers"] == {}
+    config["miners"][0]["uid"] = uid
+    config["autoProviderAdmission"] = "true"
+    result, _, _, _ = run_registry_cli(tmp_path, config, snapshot)
+    assert result.returncode != 0 and "prelaunch_config" in result.stderr
+    config["autoProviderAdmission"] = True
     config["checkpointId"] = "unknown-checkpoint"
     result, _, _, _ = run_registry_cli(tmp_path, config, snapshot)
     assert result.returncode != 0 and "prelaunch_config_checkpoint" in result.stderr

@@ -1147,19 +1147,12 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
     v3 = config.get("schema") == "attelier/subnet-h3/v3"
     required_v2 = required | {"serviceProfiles"}
     required_v3 = required_v2 | {"checkpointId"}
-    optional = {"requireFrozenLightWindow", "routingAdmission"}
-    if (
-        set(config)
-        != (
-            required_v3 | optional
-            if v3
-            else required_v2 | {"requireFrozenLightWindow"}
-            if v2
-            else required
-        )
-        and set(config)
-        != (required_v3 if v3 else required_v2 if v2 else required | {"requireFrozenLightWindow"})
-    ) or config.get("schema") not in {
+    base = required_v3 if v3 else required_v2 if v2 else required
+    optional = (
+        {"requireFrozenLightWindow", "routingAdmission", "autoProviderAdmission"}
+        if v3 else {"requireFrozenLightWindow"}
+    )
+    if not base <= set(config) <= base | optional or config.get("schema") not in {
         "attelier/subnet-h3/v1",
         "attelier/subnet-h3/v2",
         "attelier/subnet-h3/v3",
@@ -1177,6 +1170,10 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
         or (
             "requireFrozenLightWindow" in config
             and type(config["requireFrozenLightWindow"]) is not bool
+        )
+        or (
+            "autoProviderAdmission" in config
+            and type(config["autoProviderAdmission"]) is not bool
         )
     ):
         _fail("prelaunch_config")
@@ -1265,6 +1262,8 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
         _hotkey(miner["hotkey"], "prelaunch_config_miner")
         _identifier(miner["workerId"], "prelaunch_config_miner")
         reviewed = _integer(miner["operatorReviewedExpires"], "prelaunch_config_review")
+        if "autoManaged" in miner and (not v3 or type(miner["autoManaged"]) is not bool):
+            _fail("prelaunch_config_miner")
         if v2 or v3:
             ids = miner.get("profileIds")
             if (
@@ -1283,6 +1282,8 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
                 "workerId": miner["workerId"],
                 "operatorEnabled": miner["operatorEnabled"],
                 "operatorReviewedExpires": reviewed,
+                "autoManaged": config.get("autoProviderAdmission") is True
+                and miner.get("autoManaged") is True,
             }
         )
     return miners
@@ -1369,6 +1370,15 @@ def project_prelaunch_registry(
         registered = owners.get(miner["uid"])
         if not miner["operatorEnabled"]:
             continue
+        # A stale discovered member is unavailable, not a reason to prevent
+        # refreshing every other member and the full registration snapshot.
+        # The reconciler needs that fresh snapshot to renew a valid approval.
+        if miner["autoManaged"] and (
+            miner["operatorReviewedExpires"] <= observed["reviewedAt"]
+            or registered is None
+            or registered[0] != miner["hotkey"]
+        ):
+            continue
         if miner["operatorReviewedExpires"] <= observed["reviewedAt"]:
             _fail("operator_review_expired")
         if registered is None or registered[0] != miner["hotkey"]:
@@ -1404,7 +1414,7 @@ def project_prelaunch_registry(
         "miners": [
             {"uid": miner["uid"], "hotkey": miner["hotkey"], "coldkey": owners[miner["uid"]][1]}
             for miner in miners
-            if miner["operatorEnabled"]
+            if miner["id"] in workers
         ],
     }
     return registry, simulation
