@@ -1357,7 +1357,12 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
     required_v3 = required_v2 | {"checkpointId"}
     base = required_v3 if v3 else required_v2 if v2 else required
     optional = (
-        {"requireFrozenLightWindow", "routingAdmission", "autoProviderAdmission"}
+        {
+            "requireFrozenLightWindow",
+            "routingAdmission",
+            "autoProviderAdmission",
+            "syntheticCapacityBps",
+        }
         if v3
         else {"requireFrozenLightWindow"}
     )
@@ -1381,6 +1386,13 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
             and type(config["requireFrozenLightWindow"]) is not bool
         )
         or ("autoProviderAdmission" in config and type(config["autoProviderAdmission"]) is not bool)
+        or (
+            "syntheticCapacityBps" in config
+            and (
+                type(config["syntheticCapacityBps"]) is not int
+                or not 1 <= config["syntheticCapacityBps"] <= 10_000
+            )
+        )
     ):
         _fail("prelaunch_config")
     approved: set[str] = set()

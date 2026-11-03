@@ -582,6 +582,7 @@ def test_prelaunch_registry_cli_accepts_catalog_bound_v3_profiles(tmp_path):
         schema="attelier/subnet-h3/v3",
         checkpointId=checkpoint["id"],
         routingAdmission="bootstrap",
+        syntheticCapacityBps=9000,
         requireFrozenLightWindow=True,
         serviceProfiles=[profile],
         serviceProfile={"id": profile["id"], "hash": profile["hash"]},
@@ -590,6 +591,10 @@ def test_prelaunch_registry_cli_accepts_catalog_bound_v3_profiles(tmp_path):
     result, out, _, _ = run_registry_cli(tmp_path, config, snapshot)
     assert result.returncode == 0, result.stderr
     assert json.loads(out.read_text())["workers"]["fixture-owner"]["hotkey"] == OWNER_HOTKEY
+    config["syntheticCapacityBps"] = 10_001
+    invalid, _, _, _ = run_registry_cli(tmp_path, config, snapshot)
+    assert invalid.returncode != 0 and "prelaunch_config" in invalid.stderr
+    config["syntheticCapacityBps"] = 9000
     config["autoProviderAdmission"] = True
     config["miners"][0]["autoManaged"] = True
     result, out, _, _ = run_registry_cli(tmp_path, config, snapshot)
