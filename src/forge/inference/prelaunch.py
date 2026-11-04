@@ -1215,7 +1215,10 @@ def _simulate_v4(
     # after discounts, and zero valid work therefore remains entirely burn.
     base_service_weight = WEIGHT_TOTAL * policy["simulation"]["serviceBudgetBps"] // 10_000
     allocated = base_service_weight * total_weighted // (total_raw * 10_000) if total_raw else 0
-    weights = _largest_remainder(allocated, weighted) if allocated else {}
+    # Failed or late-only miners remain in the accounting rows, but have no
+    # positive share to allocate. They must not invalidate other miners' work.
+    portions = {hotkey: units for hotkey, units in weighted.items() if units > 0}
+    weights = _largest_remainder(allocated, portions) if allocated else {}
     burn = WEIGHT_TOTAL - sum(weights.values())
     miners = _validate_registry(registry)
     rows = []
@@ -1269,7 +1272,7 @@ def _simulate_v4(
             "configuredServiceBudgetBps": policy["simulation"]["serviceBudgetBps"],
             "eligibleWorkUnits": total_raw,
             "eligibleWeightedWorkUnitsBps": total_weighted,
-                "rewardMerit": "eligibleWorkUnits*frozenRemunerationBps/10000",
+            "rewardMerit": "eligibleWorkUnits*frozenRemunerationBps/10000",
             "unusedServiceBudgetToBurn": True,
         },
         "unsignedProposedWeights": {

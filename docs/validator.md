@@ -38,11 +38,13 @@ and finalized block hash are still verified independently.
 You can select your own RPC with `--network` or `--subtensor-endpoint`; see
 [Custom Subtensor RPC](#custom-subtensor-rpc) below.
 
-Live uses a fixed 5% service / 95% owner-burn split when there is eligible work.
-The 5% is shared among eligible miners in proportion to completed video seconds,
-including trial and ramp deliveries; phase does not discount them. This is a
-proposed mining-weight allocation, not a guaranteed payout or a share of total
-subnet emissions: effective incentives depend on chain consensus.
+Live uses a 5% service ceiling. Eligible deliveries earn their frozen profile's
+work units, discounted by the miner's frozen remuneration bid; any unused share
+stays burn. Trial and ramp deliveries follow the same accounting. A miner with
+only failed or ineligible deliveries keeps zero reward without blocking other
+miners' valid work. This is a proposed mining-weight allocation, not a guaranteed
+payout or a share of total subnet emissions: effective incentives depend on
+chain consensus.
 
 Work that becomes eligible and terminal in UTC window **W** determines the
 vector published during **W+1**. For example, eligible completions from

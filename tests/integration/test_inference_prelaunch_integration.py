@@ -868,6 +868,37 @@ def test_v4_frozen_bids_discount_the_fixed_service_pool_and_leave_residual_burn(
     assert artifact["service"]["eligibleWeightedWorkUnitsBps"] == 16_000_000
     assert artifact["service"]["unusedServiceBudgetToBurn"] is True
 
+    # A failed-only miner has zero merit. Its terminal must remain accounted
+    # for without preventing the successful miner's fixed service allocation.
+    mixed = copy.deepcopy(ledger)
+    failed = mixed["aggregates"][0]
+    failed.update(
+        succeeded=0,
+        failed=1,
+        completedVideoMs=0,
+        eligibleSucceeded=0,
+        eligibleVideoMs=0,
+        eligibleWorkUnits=0,
+        eligibleWeightedWorkUnitsBps=0,
+    )
+    result = run_cli(tmp_path, mixed, policy, registry)
+    assert result.returncode == 0, result.stderr
+    artifact = json.loads(result.stdout)
+    assert artifact["unsignedProposedWeights"]["entries"] == [
+        {"kind": "miner", "uid": 4, "hotkey": OTHER, "weight": 3276},
+        {"kind": "burn", "weight": 62259},
+    ]
+    by_hotkey = {miner["hotkey"]: miner for miner in artifact["miners"]}
+    assert by_hotkey[OWNER_HOTKEY]["proposedWeight"] == 0
+    assert by_hotkey[OTHER]["eligibleWorkUnits"] == 1000
+
+    mixed["aggregates"] = [failed]
+    result = run_cli(tmp_path, mixed, policy, registry)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["unsignedProposedWeights"]["entries"] == [
+        {"kind": "burn", "weight": 65535}
+    ]
+
     # A one-basis-point bid is not rounded per job: even 1,000 raw units stay
     # below one integer weight unit and therefore burn, rather than being made
     # whole from the five-percent ceiling.
