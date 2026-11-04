@@ -1068,6 +1068,12 @@ def _simulate_v4(
     gateway = policy.get("gatewayPolicy")
     if not isinstance(gateway, dict) or not isinstance(gateway.get("serviceProfiles"), list):
         _fail("v4_policy")
+    if (
+        ledger.get("policyHash") != digest(policy)
+        or ledger.get("gatewayPolicyHash") != digest(gateway)
+        or ledger.get("workerPoolHash") != digest(policy.get("workers"))
+    ):
+        _fail("v4_ledger_policy_hash")
     # Validate exact quality contracts before reducing the receipts to the V3
     # admission lineage reader.  V3/V2 policies remain accepted admissions.
     for profile in gateway["serviceProfiles"]:
@@ -1174,7 +1180,8 @@ def _simulate_v4(
         }
 
     closing = downgrade(policy)
-    old_admissions = []
+    old_admissions: dict[str, dict[str, Any]] = {}
+    admission_hashes: dict[str, str] = {}
     for item in admissions:
         if (
             not isinstance(item, dict)
@@ -1182,33 +1189,89 @@ def _simulate_v4(
             or not isinstance(item["policy"], dict)
         ):
             _fail("v4_admission")
-        accepted = item["policy"]
+        original = item["policy"]
+        original_hash = item.get("policyHash")
+        if original_hash != digest(original):
+            _fail("v4_admission_hash")
+        accepted = original
         if accepted.get("schema") == POLICY_SCHEMA_V4:
+            # A V4 receipt carries quality in the hash-bound original snapshot.
+            # Validate it before removing that additive field solely for V3's
+            # established terminal/accounting checker.
+            profiles = accepted.get("gatewayPolicy", {}).get("serviceProfiles")
+            if not isinstance(profiles, list) or not all(
+                isinstance(profile, dict) and _valid_h3_quality_v1(profile.get("quality"))
+                for profile in profiles
+            ):
+                _fail("v4_admission_quality")
             accepted = downgrade(accepted)
         if accepted.get("schema") not in {POLICY_SCHEMA_V2, POLICY_SCHEMA_V3}:
             _fail("v4_admission")
-        # The original hash remains the binding ID; only the reader view is
-        # normalized, so V3 cannot verify its digest. Validate below directly.
-        old_admissions.append({"policyHash": item["policyHash"], "policy": accepted})
-    # Directly require the original admission hashes and use a temporary V3
-    # receipt only for count/media/provenance arithmetic.
+        normalized_hash = digest(accepted)
+        if original_hash in admission_hashes:
+            _fail("v4_admission_duplicate")
+        admission_hashes[original_hash] = normalized_hash
+        old_admissions[normalized_hash] = {"policyHash": normalized_hash, "policy": accepted}
+    # Preserve and verify each original admission hash, but remap V4 snapshots
+    # to their quality-free V3 reader view.  This reuses V3's full validation of
+    # counts, work units, profile/worker bindings and V2/V3 admission lineage.
+    validation_rows: dict[tuple[str, str, str, str, str, str], dict[str, Any]] = {}
+    count_fields = (
+        "attempted",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "inconclusive",
+        "completedVideoMs",
+        "eligibleSucceeded",
+        "eligibleVideoMs",
+        "slowSucceeded",
+        "eligibleWorkUnits",
+    )
+    for row in v3_rows:
+        normalized_hash = admission_hashes.get(row["admissionPolicyHash"])
+        if normalized_hash is None:
+            _fail("v4_admission_binding")
+        key = (
+            normalized_hash,
+            row["minerHotkey"],
+            row["workerId"],
+            row["trustMode"],
+            row["profileId"],
+            row["profileHash"],
+        )
+        prior = validation_rows.get(key)
+        if prior is None:
+            validation_rows[key] = {**row, "admissionPolicyHash": normalized_hash}
+            continue
+        for field in count_fields:
+            prior[field] = _safe_derived(
+                _integer(prior[field], "v4_aggregate") + _integer(row[field], "v4_aggregate"),
+                "v4_aggregate",
+            )
     old_ledger = {
         **ledger,
         "schema": LEDGER_SCHEMA_V3,
         "policyHash": digest(closing),
         "gatewayPolicyHash": digest(closing["gatewayPolicy"]),
         "workerPoolHash": digest(closing["workers"]),
-        "admissionPolicies": old_admissions,
-        "aggregates": v3_rows,
+        "admissionPolicies": list(old_admissions.values()),
+        "aggregates": list(validation_rows.values()),
     }
-    # V3 hashes are intentionally incompatible for V4 admission snapshots, so
-    # run its structural path only when all receipts were admitted under V2/V3.
-    if all(item["policy"].get("schema") != POLICY_SCHEMA_V4 for item in admissions):
-        _simulate_v3(old_ledger, closing, registry)
-    else:
-        # V4 admission snapshots are structurally checked above; registration
-        # remains authoritative through the current closing policy/registry.
-        _validate_registry(registry)
+    # Validate every bid group before the V3 view merges equal
+    # worker/profile/admission rows.  Otherwise complementary corrupt rows
+    # could add up to plausible terminal counts while retaining distinct V4
+    # bids and weighted numerators.
+    for row in v3_rows:
+        normalized_hash = admission_hashes.get(row["admissionPolicyHash"])
+        if normalized_hash is None:
+            _fail("v4_admission_binding")
+        _simulate_v3(
+            {**old_ledger, "aggregates": [{**row, "admissionPolicyHash": normalized_hash}]},
+            closing,
+            registry,
+        )
+    _simulate_v3(old_ledger, closing, registry)
     total_raw = sum(raw.values())
     total_weighted = sum(weighted.values())
     # The configured service pool is a fixed 5% ceiling.  It is not made whole

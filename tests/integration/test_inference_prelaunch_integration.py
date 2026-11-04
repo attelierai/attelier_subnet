@@ -868,6 +868,18 @@ def test_v4_frozen_bids_discount_the_fixed_service_pool_and_leave_residual_burn(
     assert artifact["service"]["eligibleWeightedWorkUnitsBps"] == 16_000_000
     assert artifact["service"]["unusedServiceBudgetToBurn"] is True
 
+    # Different frozen bids may legitimately split one worker/profile hour.
+    # The V3 validation view merges only its structural counters; V4 retains
+    # the two original weighted numerators for the actual allocation.
+    split_bid = copy.deepcopy(ledger)
+    split_bid["aggregates"] = [
+        aggregate(OTHER, "other-worker", 6000),
+        aggregate(OTHER, "other-worker", 10000),
+    ]
+    result = run_cli(tmp_path, split_bid, policy, registry)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["service"]["eligibleWeightedWorkUnitsBps"] == 16_000_000
+
     # A failed-only miner has zero merit. Its terminal must remain accounted
     # for without preventing the successful miner's fixed service allocation.
     mixed = copy.deepcopy(ledger)
@@ -898,6 +910,50 @@ def test_v4_frozen_bids_discount_the_fixed_service_pool_and_leave_residual_burn(
     assert json.loads(result.stdout)["unsignedProposedWeights"]["entries"] == [
         {"kind": "burn", "weight": 65535}
     ]
+
+    # A valid outer signature must not turn minted work units or a modified
+    # admission snapshot into service merit: V4 reuses the V3 receipt checks.
+    inconsistent = copy.deepcopy(ledger)
+    inconsistent["aggregates"][0]["eligibleWorkUnits"] = 2000
+    inconsistent["aggregates"][0]["eligibleWeightedWorkUnitsBps"] = 12_000_000
+    result = run_cli(tmp_path, inconsistent, policy, registry)
+    assert result.returncode != 0 and "ledger_counts" in result.stderr
+    altered_snapshot = copy.deepcopy(ledger)
+    altered_snapshot["admissionPolicies"][0]["policy"]["workers"] = []
+    result = run_cli(tmp_path, altered_snapshot, policy, registry)
+    assert result.returncode != 0 and "v4_admission_hash" in result.stderr
+
+    altered_outer_policy = copy.deepcopy(ledger)
+    altered_outer_policy["policyHash"] = "0" * 64
+    result = run_cli(tmp_path, altered_outer_policy, policy, registry)
+    assert result.returncode != 0 and "v4_ledger_policy_hash" in result.stderr
+
+    complementary = copy.deepcopy(ledger)
+    first = aggregate(OTHER, "other-worker", 10000)
+    first.update(
+        succeeded=0,
+        failed=1,
+        completedVideoMs=0,
+        eligibleSucceeded=0,
+        eligibleVideoMs=0,
+        eligibleWorkUnits=1000,
+        eligibleWeightedWorkUnitsBps=10_000_000,
+    )
+    second = aggregate(OTHER, "other-worker", 5000)
+    second.update(
+        attempted=2,
+        succeeded=2,
+        completedVideoMs=10_000,
+        eligibleSucceeded=2,
+        eligibleVideoMs=10_000,
+        eligibleWorkUnits=1000,
+        eligibleWeightedWorkUnitsBps=5_000_000,
+    )
+    # Together these rows look valid after a merge; individually both mint
+    # incompatible profile units and must be rejected before bid-group merge.
+    complementary["aggregates"] = [first, second]
+    result = run_cli(tmp_path, complementary, policy, registry)
+    assert result.returncode != 0 and "ledger_counts" in result.stderr
 
     # A one-basis-point bid is not rounded per job: even 1,000 raw units stay
     # below one integer weight unit and therefore burn, rather than being made

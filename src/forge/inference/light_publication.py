@@ -120,6 +120,75 @@ def eligible_workers(artifact: dict[str, Any]) -> dict[int, int]:
     return output
 
 
+def publication_weights(body: dict[str, Any], artifact: dict[str, Any]) -> dict[int, int]:
+    """Return the relative vector frozen by the signed simulation.
+
+    V1--V3 publish their historical fixed 95/5 relative vector.  V4 is a
+    reverse auction: its unsigned artifact already contains the discounted
+    service allocation and its residual burn.  Re-deriving that vector from
+    raw eligible work would silently erase the frozen bid.
+    """
+
+    policy = body.get("policy")
+    if not isinstance(policy, dict) or policy.get("schema") != "attelier/prelaunch-policy/v4":
+        return relative_vector(eligible_workers(artifact))
+    unsigned = artifact.get("unsignedProposedWeights")
+    rows = artifact.get("miners")
+    if (
+        not isinstance(unsigned, dict)
+        or set(unsigned) != {"total", "entries"}
+        or unsigned.get("total") != U16_MAX
+        or not isinstance(unsigned.get("entries"), list)
+        or not isinstance(rows, list)
+    ):
+        raise PublicationError("light_live_artifact")
+    miners: dict[tuple[int, str], dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            raise PublicationError("light_live_artifact")
+        uid, hotkey = row.get("uid"), row.get("hotkey")
+        if type(uid) is not int or not isinstance(hotkey, str) or (uid, hotkey) in miners:
+            raise PublicationError("light_live_artifact")
+        miners[(uid, hotkey)] = row
+    weights: dict[int, int] = {}
+    seen_hotkeys: set[str] = set()
+    for entry in unsigned["entries"]:
+        if not isinstance(entry, dict) or type(entry.get("weight")) is not int:
+            raise PublicationError("light_live_artifact")
+        weight = entry["weight"]
+        if not 0 < weight <= U16_MAX:
+            raise PublicationError("light_live_artifact")
+        if entry.get("kind") == "burn":
+            if set(entry) != {"kind", "weight"} or BURN_UID in weights:
+                raise PublicationError("light_live_artifact")
+            weights[BURN_UID] = weight
+            continue
+        if entry.get("kind") != "miner" or set(entry) != {"kind", "uid", "hotkey", "weight"}:
+            raise PublicationError("light_live_artifact")
+        uid, hotkey = entry.get("uid"), entry.get("hotkey")
+        if (
+            type(uid) is not int
+            or uid == BURN_UID
+            or not isinstance(hotkey, str)
+            or uid in weights
+            or hotkey in seen_hotkeys
+        ):
+            raise PublicationError("light_live_artifact")
+        row = miners.get((uid, hotkey))
+        if (
+            row is None
+            or row.get("proposedWeight") != weight
+            or type(row.get("eligibleWeightedWorkUnitsBps")) is not int
+            or row["eligibleWeightedWorkUnitsBps"] <= 0
+        ):
+            raise PublicationError("light_live_artifact")
+        weights[uid] = weight
+        seen_hotkeys.add(hotkey)
+    if BURN_UID not in weights or sum(weights.values()) != U16_MAX:
+        raise PublicationError("light_live_artifact")
+    return weights
+
+
 @dataclass(frozen=True)
 class LiveIntent:
     sequence: int
@@ -226,6 +295,26 @@ class LiveJournal:
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.path, timeout=30, isolation_level=None)
 
+    def existing(self, sequence: int) -> dict[str, Any] | None:
+        """Read one canonical durable intent without changing its bytes."""
+
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT intent, status, receipt FROM live_intent WHERE sequence=?", (sequence,)
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            intent = LiveIntent.from_dict(json.loads(row[0]))
+            receipt = json.loads(row[2]) if row[2] else None
+        except (TypeError, json.JSONDecodeError, PublicationError) as error:
+            raise PublicationError("light_live_journal_intent") from error
+        if canonical(intent.as_dict()).decode("ascii") != row[0] or (
+            receipt is not None and not isinstance(receipt, dict)
+        ):
+            raise PublicationError("light_live_journal_intent")
+        return {"status": row[1], "receipt": receipt, "intent": intent}
+
     def prepare(self, intent: LiveIntent) -> dict[str, Any]:
         # Legacy transport labels are readable only from an existing durable
         # row. No new publication may ever write one again.
@@ -312,14 +401,8 @@ class LivePublisher:
     def __init__(self, journal: LiveJournal, publisher: Publisher) -> None:
         self.journal, self.publisher = journal, publisher
 
-    def process(self, body: dict[str, Any], artifact: dict[str, Any]) -> dict[str, Any]:
-        # CR period can exceed the feed cadence. Keep old confirmed commits
-        # observable without blocking a newer hourly commit.
-        for old_intent, old_receipt in self.journal.reveal_pending():
-            reconciled = self.publisher.reconcile(old_intent, old_receipt)
-            self.journal.update(old_intent, reconciled["status"], reconciled)
-        ledger, registry = body["ledger"], body["registry"]
-        weights = relative_vector(eligible_workers(artifact))
+    @staticmethod
+    def _targets(registry: dict[str, Any], weights: dict[int, int]) -> dict[int, tuple[str, str]]:
         registry_rows = registry.get("miners") if isinstance(registry, dict) else None
         if not isinstance(registry_rows, list):
             raise PublicationError("light_live_registry")
@@ -336,21 +419,55 @@ class LivePublisher:
                 targets[uid] = (hotkey, coldkey)
         if set(weights) - {BURN_UID} != set(targets):
             raise PublicationError("light_live_target_not_frozen")
-        # The registry pins the subnet owner coldkey. UID 0 is verified against
-        # it separately because it is intentionally not a service miner row.
         owner_coldkey = registry.get("subnetOwnerColdkey") if isinstance(registry, dict) else None
         if not isinstance(owner_coldkey, str):
             raise PublicationError("light_live_registry")
         targets[BURN_UID] = ("", owner_coldkey)
-        intent = LiveIntent(
-            sequence=ledger["sequence"],
-            feed_digest=digest(body),
-            window=ledger["window"],
-            registry_hash=digest(registry),
-            weights=weights,
-            targets=targets,
-        )
-        current = self.journal.prepare(intent)
+        return targets
+
+    def process(self, body: dict[str, Any], artifact: dict[str, Any]) -> dict[str, Any]:
+        # CR period can exceed the feed cadence. Keep old confirmed commits
+        # observable without blocking a newer hourly commit.
+        for old_intent, old_receipt in self.journal.reveal_pending():
+            reconciled = self.publisher.reconcile(old_intent, old_receipt)
+            self.journal.update(old_intent, reconciled["status"], reconciled)
+        ledger, registry = body["ledger"], body["registry"]
+
+        def intent_for(weights: dict[int, int]) -> LiveIntent:
+            return LiveIntent(
+                sequence=ledger["sequence"],
+                feed_digest=digest(body),
+                window=ledger["window"],
+                registry_hash=digest(registry),
+                weights=weights,
+                targets=self._targets(registry, weights),
+            )
+
+        intent = intent_for(publication_weights(body, artifact))
+        current = self.journal.existing(intent.sequence)
+        if current is None:
+            current = self.journal.prepare(intent)
+        elif not _same_intent_except_legacy_transport(current["intent"], intent):
+            # A V4 feed may already have a durable pre-upgrade submission made
+            # from the legacy raw-work 95/5 vector. Reconcile precisely that
+            # old intent; never rewrite it or use this exception for PREPARED.
+            legacy = intent_for(relative_vector(eligible_workers(artifact)))
+            compatible_statuses = {
+                "SUBMITTING",
+                "UNKNOWN_AFTER_SUBMIT",
+                "COMMITTED",
+                "REVEAL_PENDING",
+                "REVEALED",
+            }
+            if (
+                body.get("policy", {}).get("schema") != "attelier/prelaunch-policy/v4"
+                or current["status"] not in compatible_statuses
+                or not _same_intent_except_legacy_transport(current["intent"], legacy)
+            ):
+                raise PublicationError("light_live_sequence_conflict")
+        # A matching existing row can retain the legacy websocket label. From
+        # this point every guard, durable update and reconciliation must use its
+        # exact intent bytes; only a newly prepared row carries Finney.
         if current["status"] == "BLOCKED_BY_PENDING":
             pending = LiveIntent.from_dict(current["pendingIntent"])
             receipt = self.publisher.reconcile(pending, current["pendingReceipt"])
@@ -358,9 +475,6 @@ class LivePublisher:
             if receipt["status"] in {"SUBMITTING", "UNKNOWN_AFTER_SUBMIT"}:
                 raise PublicationError("light_live_unreconciled_submission")
             current = self.journal.prepare(intent)
-        # A matching existing row can retain the legacy websocket label. From
-        # this point every guard, durable update and reconciliation must use its
-        # exact intent bytes; only a newly prepared row carries Finney.
         intent = current.get("intent", intent)
         if current["status"] in {"SUBMITTING", "UNKNOWN_AFTER_SUBMIT"}:
             receipt = self.publisher.reconcile(intent, current["receipt"] or {})

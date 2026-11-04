@@ -636,8 +636,7 @@ def main() -> None:
             try:
                 if args.dry_run:
                     from forge.inference.light_publication import (
-                        eligible_workers,
-                        relative_vector,
+                        publication_weights,
                     )
 
                     _atomic_write(
@@ -647,7 +646,7 @@ def main() -> None:
                             "relativeWeights": [
                                 [uid, weight]
                                 for uid, weight in sorted(
-                                    relative_vector(eligible_workers(artifact)).items()
+                                    publication_weights(body, artifact).items()
                                 )
                             ],
                         },

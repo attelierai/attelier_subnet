@@ -17,7 +17,7 @@ thresholds, or the window length.
 
 The light validator **publishes weights by default**. Start it with
 `--wallet.name NAME --wallet.hotkey NAME`; `--live` is no longer needed.
-It accepts fresh signed one-hour Finney/SN126/M0 live receipts with a fixed 500
+It accepts fresh signed one-hour Finney/SN126/M0 live receipts with a maximum 500
 bps service pool. It never chooses a wallet implicitly: both names are required
 for publication. Use **`--dry-run`** to verify and simulate without loading a
 wallet, signing, or sending weights. Give dry-run its own `--state-dir`; the
@@ -45,6 +45,12 @@ only failed or ineligible deliveries keeps zero reward without blocking other
 miners' valid work. This is a proposed mining-weight allocation, not a guaranteed
 payout or a share of total subnet emissions: effective incentives depend on
 chain consensus.
+
+V4 validates each frozen bid group's work against its original admission
+snapshot before combining rewards. The live publisher and dry-run use the same
+discounted vector, including its residual burn. Already submitted historical
+intents retain their exact bytes for reconciliation; an upgrade never rewrites
+their published allocation.
 
 Work that becomes eligible and terminal in UTC window **W** determines the
 vector published during **W+1**. For example, eligible completions from

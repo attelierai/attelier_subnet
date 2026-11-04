@@ -19,6 +19,7 @@ import pytest
 from forge.chain import BittensorChain
 from forge.inference.light import (
     DOMAIN,
+    DOMAIN_V4,
     LightError,
     LightRunner,
     fetch_feed,
@@ -31,15 +32,17 @@ from forge.inference.light_publication import (
     PublicationError,
     SdkM0Publisher,
     _chain_bytes,
+    eligible_workers,
     relative_vector,
 )
 from forge.inference.light_registry import RegistryError, verify_finalized_registry
-from forge.inference.prelaunch import canonical, digest
+from forge.inference.prelaunch import _h3_catalog, _h3_catalog_profile, canonical, digest
 
 GENESIS = "0x2f0555cc76fc2840a25a6ea3b9637146806f1f44b090c175ffde2a7e5ab36c03"
 OWNER = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
 MINER_A = "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
 MINER_B = "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y"
+MINER_C = "5GByreknmyyYAnMgeUfr8GBryYq25cPJWMTMMiGDatrtsXGm"
 DAY_MS = 86_400_000
 
 
@@ -179,6 +182,153 @@ def _feed(tmp_path, private, *, sequence=1, target=240, expires=None, tamper_sig
         "signature": base64.b64encode(signature).decode("ascii"),
     }
     return canonical(envelope)
+
+
+def _v4_feed(tmp_path, private, *, sequence=7, bid_a=6000, bid_b=10000):
+    _, _, registry = _inputs()
+    registry["miners"].append({"uid": 5, "hotkey": MINER_C, "coldkey": MINER_C})
+    quality = {
+        "schema": "attelier/h3-quality/v1",
+        "minimumOutcomes": 1,
+        "minimumSuccessBps": 9500,
+        "minimumObservationMs": 0,
+        "evidenceWindowMs": DAY_MS,
+        "cooldownMs": 900_000,
+        "durationToleranceMs": 150,
+        "minimumVisualScoreBps": None,
+        "calibrationStatus": "measured",
+        "referenceJobId": None,
+    }
+    profile = {
+        "durationMs": 5000,
+        "resolution": "480p",
+        "aspectRatio": "16:9",
+        "maxJobSeconds": 600,
+        "maxTtvMs": 600_000,
+        "rewardWorkUnits": 1000,
+        "rewardBasis": "pixel_frames",
+        "approvalHash": "d" * 64,
+        "quality": quality,
+    }
+    profile["id"], profile["hash"] = _h3_catalog_profile(
+        profile, _h3_catalog()["minimax-h3-fl2va-bf16-v1"]
+    )
+    workers = [
+        {
+            "minerHotkey": MINER_A,
+            "workerId": "fixture-a",
+            "trustMode": "operator_whitelist",
+            "profileIds": [profile["id"]],
+        },
+        {
+            "minerHotkey": MINER_B,
+            "workerId": "fixture-b",
+            "trustMode": "operator_whitelist",
+            "profileIds": [profile["id"]],
+        },
+        {
+            "minerHotkey": MINER_C,
+            "workerId": "fixture-c-zero",
+            "trustMode": "operator_whitelist",
+            "profileIds": [profile["id"]],
+        },
+    ]
+    policy = {
+        "schema": "attelier/prelaunch-policy/v4",
+        "network": "finney",
+        "genesis": GENESIS,
+        "netuid": 126,
+        "mechanism": 0,
+        "windowMs": 3_600_000,
+        "gatewayPolicy": {
+            "minSuccessBps": 0,
+            "rewardEligibility": "per_job",
+            "serviceProfiles": [profile],
+        },
+        "workers": workers,
+        "simulation": {
+            "serviceBudgetBps": 500,
+            "targetVideosPerDay": 240,
+            "nominalMinerEmissionRaoPerDay": "2952000000000",
+            "allocationMode": "fixed",
+        },
+    }
+
+    def aggregate(hotkey, worker, bps, units, *, failed=0):
+        return {
+            "minerHotkey": hotkey,
+            "workerId": worker,
+            "trustMode": "operator_whitelist",
+            "profileId": profile["id"],
+            "profileHash": profile["hash"],
+            "admissionPolicyHash": digest(policy),
+            "remunerationBps": bps,
+            "attempted": 1,
+            "succeeded": 1 - failed,
+            "failed": failed,
+            "cancelled": 0,
+            "inconclusive": 0,
+            "completedVideoMs": 5000 * (1 - failed),
+            "eligibleSucceeded": 1 - failed,
+            "eligibleVideoMs": 5000 * (1 - failed),
+            "slowSucceeded": 0,
+            "eligibleWorkUnits": units,
+            "eligibleWeightedWorkUnitsBps": units * bps,
+        }
+
+    ledger = {
+        "schema": "attelier/prelaunch-ledger/v4",
+        "network": "finney",
+        "genesis": GENESIS,
+        "netuid": 126,
+        "mechanism": 0,
+        "window": {"startMs": 3_600_000, "endMs": 7_200_000},
+        "sequence": sequence,
+        "closedAtMs": 7_200_000,
+        "policyHash": digest(policy),
+        "gatewayPolicyHash": digest(policy["gatewayPolicy"]),
+        "workerPoolHash": digest(workers),
+        "admissionPolicies": [{"policyHash": digest(policy), "policy": policy}],
+        "aggregates": [
+            aggregate(MINER_A, "fixture-a", bid_a, 1000),
+            aggregate(MINER_B, "fixture-b", bid_b, 1000),
+            aggregate(MINER_C, "fixture-c-zero", bid_b, 0, failed=1),
+        ],
+    }
+    body = {
+        "schema": "attelier/light-input/v4",
+        "network": "finney",
+        "genesis": GENESIS,
+        "netuid": 126,
+        "mechanism": 0,
+        "mode": "live",
+        "issuedAtMs": 7_200_000,
+        "expiresAtMs": 10_800_000,
+        "policy": policy,
+        "ledger": ledger,
+        "registry": registry,
+    }
+    message = tmp_path / "v4-message"
+    message.write_bytes(DOMAIN_V4 + canonical(body))
+    signature = subprocess.run(
+        ["openssl", "pkeyutl", "-sign", "-inkey", str(private), "-rawin", "-in", str(message)],
+        check=True,
+        capture_output=True,
+    ).stdout
+    raw_key = subprocess.run(
+        ["openssl", "pkey", "-in", str(private), "-pubout", "-outform", "DER"],
+        check=True,
+        capture_output=True,
+    ).stdout[-32:]
+    return canonical(
+        {
+            "schema": "attelier/light-feed/v4",
+            "keyId": hashlib.sha256(raw_key).hexdigest(),
+            "body": body,
+            "digest": digest(body),
+            "signature": base64.b64encode(signature).decode("ascii"),
+        }
+    )
 
 
 @contextmanager
@@ -1067,6 +1217,93 @@ def test_live_journal_keeps_committed_windows_moving_and_blocks_unknown(tmp_path
     journal.update(pending, "UNKNOWN_AFTER_SUBMIT", {"error": "Timeout"})
     with pytest.raises(PublicationError, match="unreconciled"):
         publisher.process(third, artifact)
+
+
+def test_live_publisher_uses_signed_v4_discounted_vector_including_zero_merit_rows(tmp_path):
+    private, public = _keypair(tmp_path)
+    raw = _v4_feed(tmp_path, private)
+    body = verify_feed(raw, public, now_ms=7_200_001, allow_live=True)
+    artifact = LightRunner(
+        tmp_path / "v4-state", public, allow_live=True, registry_verifier=lambda _: None
+    ).process(raw, now_ms=7_200_001)
+
+    class Publisher:
+        def guard(self, intent):
+            return {"sequence": intent.sequence}
+
+        def submit(self, intent, _guard):
+            return {"status": "COMMITTED", "weights": intent.weights}
+
+        def reconcile(self, _intent, receipt):
+            return receipt
+
+    result = LivePublisher(LiveJournal(tmp_path / "v4.sqlite3"), Publisher()).process(
+        body, artifact
+    )
+    frozen = artifact["unsignedProposedWeights"]["entries"]
+    expected = {0 if entry["kind"] == "burn" else entry["uid"]: entry["weight"] for entry in frozen}
+    assert result["intent"]["relativeWeights"] == [
+        [uid, weight] for uid, weight in sorted(expected.items())
+    ]
+    assert sum(expected.values()) == 65_535
+    assert expected[3] != expected[4]
+    assert expected[0] > 62_259
+
+
+def test_live_publisher_reconciles_only_a_matching_pre_upgrade_v4_intent(tmp_path):
+    private, public = _keypair(tmp_path)
+    old_raw = _v4_feed(tmp_path, private, bid_a=10000, bid_b=10000)
+    old_body = verify_feed(old_raw, public, now_ms=7_200_001, allow_live=True)
+    old_artifact = LightRunner(
+        tmp_path / "old-v4-state", public, allow_live=True, registry_verifier=lambda _: None
+    ).process(old_raw, now_ms=7_200_001)
+
+    class Publisher:
+        def guard(self, intent):
+            return {"sequence": intent.sequence}
+
+        def submit(self, intent, _guard):
+            return {"status": "COMMITTED", "weights": intent.weights}
+
+        def reconcile(self, _intent, receipt):
+            return {**receipt, "status": "REVEALED"}
+
+    journal = LiveJournal(tmp_path / "upgrade.sqlite3")
+    publisher = LivePublisher(journal, Publisher())
+    old_weights = relative_vector(eligible_workers(old_artifact))
+    old_intent = LiveIntent(
+        sequence=old_body["ledger"]["sequence"],
+        feed_digest=digest(old_body),
+        window=old_body["ledger"]["window"],
+        registry_hash=digest(old_body["registry"]),
+        weights=old_weights,
+        targets=publisher._targets(old_body["registry"], old_weights),
+    )
+    prepared = LiveJournal(tmp_path / "prepared-upgrade.sqlite3")
+    assert prepared.prepare(old_intent)["status"] == "PREPARED"
+    with pytest.raises(PublicationError, match="sequence_conflict"):
+        LivePublisher(prepared, Publisher()).process(old_body, old_artifact)
+    assert journal.prepare(old_intent)["status"] == "PREPARED"
+    journal.update(old_intent, "COMMITTED", {"status": "COMMITTED"})
+
+    recovered = publisher.process(old_body, old_artifact)
+    assert recovered["status"] == "REVEALED"
+    assert recovered["intent"] == old_intent.as_dict()
+
+    new_raw = _v4_feed(tmp_path, private, sequence=8, bid_a=6000, bid_b=10000)
+    new_body = verify_feed(new_raw, public, now_ms=7_200_001, allow_live=True)
+    new_artifact = LightRunner(
+        tmp_path / "new-v4-state", public, allow_live=True, registry_verifier=lambda _: None
+    ).process(new_raw, now_ms=7_200_001)
+    published = publisher.process(new_body, new_artifact)
+    expected = {
+        0 if entry["kind"] == "burn" else entry["uid"]: entry["weight"]
+        for entry in new_artifact["unsignedProposedWeights"]["entries"]
+    }
+    assert published["status"] == "COMMITTED"
+    assert published["intent"]["relativeWeights"] == [
+        [uid, weight] for uid, weight in sorted(expected.items())
+    ]
 
 
 def test_sdk_m0_persists_exact_call_before_submit_reconciles_and_blocks_uid_reuse(tmp_path):
