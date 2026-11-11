@@ -13,9 +13,9 @@ writes. Old `--live` commands remain valid, but that flag is no longer needed.
 Historical shadow accepts one UTC day or hour; the current live contract accepts
 exactly one UTC hour (`3,600,000` ms) indefinitely. The policy hash binds the cadence, worker pool, fixed
 mining-pool share, signed network target, and service inputs to each closed
-receipt. Live is a fixed 500 bps service pool and 9,500 bps owner-burn split;
-one eligible completion is enough. Empty signed windows are valid and burn
-100%.
+receipt. Live has a 500 bps service ceiling and at least 9,500 bps burn;
+one eligible completion can contribute. Empty signed windows are valid; without
+bounded continuity their unused service share also burns.
 
 Every row binds a reviewed worker to its configured UID, hotkey, worker ID, and
 profile. A hotkey/application has at most one non-revoked worker; pausing does
@@ -38,9 +38,10 @@ only workers reporting protocol version 2 and runtime version 1.2.0; all v1
 history remains unchanged.
 
 The artifact separates service merit, unsigned proposed weights, counterfactual
-allocation, and expected payout. The current live share is fixed at 500 bps
-(5%) of the mining pool; empty eligible service is a full burn. If no verified
-feed is available after the 10-minute grace, that window is also burn, and the
+allocation, and expected payout. The current live ceiling is 500 bps
+(5%) of the mining pool. Without valid continuity, empty eligible service is a
+full burn. If no verified feed is available after the 10-minute grace and
+continuity is unavailable, that window is also burn, and the
 next valid window resumes without retroactive accounting. An owner-associated
 shadow row has zero expected mining payout. Historical 10% shadow artifacts are
 kept only for reproducible replay. Simulation artifacts themselves are unsigned;
@@ -76,6 +77,18 @@ additive: `attelier/h3-quality/v1` records the required outcomes, success rate,
 observation/evidence window, cooldown, duration tolerance, optional visual
 threshold, calibration state, and reference job. It never introduces a GPU
 requirement.
+
+## V5 organic reward units
+
+The current V5 policy, ledger and signed feed preserve the V4 service ceiling
+and frozen remuneration bids. `organicRewardMultiplierBps` is exactly `20,000`.
+Organic work admitted under V5 earns twice the reward units of equivalent
+synthetic work. Aggregates bind their traffic kind and admission policy; work
+admitted under V2–V4 keeps its original multiplier even if it finishes in V5.
+The boosted units enter both the service allocation denominator and each
+miner's discounted numerator. They never increase the 5% ceiling or turn failed,
+late or cancelled work into eligible service. Historical V1–V4 inputs remain
+readable; V4-only readers cannot verify a V5 envelope.
 
 ## Registry projection
 
@@ -122,3 +135,17 @@ checks Finney/SN126/M0, CRv4,
 validator permit, burn UID0 owner identity and `RecycleOrBurn=Burn` before the
 SDK may compose a weight commit. `--dry-run` keeps all reads and accounting but
 never loads a wallet or submits a transaction.
+
+With `--continuity-max-hours 2` (or `6`), an empty live window or transport/age
+failure can preserve the latest positive V4/V5 allocation until that source
+window's end plus the configured limit. The separate signed
+`/v1/subnet/126/light/availability` snapshot expires after 120 seconds and binds
+recent authenticated health, approval, active state, worker identity and current
+registration. Bad signatures, identity faults or absent/stale availability do
+not authorize continuity. Down, paused, revoked or replaced workers lose their
+share to burn; remaining shares retain their frozen bid discounts and organic
+multiplier within the original 5% ceiling. Heartbeats and restarts never extend
+the source deadline. The accepted work ledger remains unchanged; continuity has
+its own input/artifact schemas and `continuity-status.json`, and uses the same
+durable publication journal and final chain identity checks. The default is
+`2`; an explicit `0` disables continuity.

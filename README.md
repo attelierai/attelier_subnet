@@ -31,16 +31,31 @@ The current live-policy contract uses indefinite one-hour UTC windows. Eligible
 work completed in window W determines accounting for W+1; pending work belongs
 to the window in which it becomes terminal.
 
-The signed V4 policy uses 5% of the mining pool as a service ceiling, not a
+The current V5 feed requires a V5-compatible reader; older V4-only readers
+reject it. Upgrade the validator code and environment, then restart the existing
+service with the same wallet and state directory. Preserve pending commits and
+publication journals. The reader continues to verify historical V1–V4 inputs.
+
+The signed policy uses 5% of the mining pool as a service ceiling, not a
 guaranteed allocation. Eligible, timely, custodied exact-profile deliveries earn
 work units; their frozen remuneration bid discounts the service allocation, and
 the deterministic residual burns rather than being normalized back to 5%.
-The remaining non-service share, an empty signed hourly window, or a missing or
-unavailable feed after the 10-minute grace are burn; the next valid window
-resumes normally with no retroactive catch-up. Synthetic demand runs continuously
-and is capped atomically at 90% of healthy compatible capacity, preserving at
-least one fleet slot for organic requests where the fleet has enough slots.
-This is fleet-wide, not a per-miner promise. An owner-associated row has zero
+V5 gives organic work twice the reward units of equivalent synthetic work,
+inside that same service ceiling. Work keeps its admission policy across an
+hour boundary; cancelled work earns no units.
+
+During an empty window or a transport/age failure, signed fresh availability
+can retain the latest positive miner shares for up to 2 hours by default.
+`--continuity-max-hours 6` explicitly selects a longer grace period; `0` disables
+it. Restarts and heartbeats do not extend the historical source deadline.
+Unavailable, paused, revoked or changed workers lose their shares to burn.
+Bad signatures and identity faults cannot authorize continuity. Without eligible
+work or valid continuity, the unused service share burns; a later valid window
+resumes normally without retroactive catch-up.
+
+Synthetic demand runs continuously and can fill healthy compatible capacity
+when organic preemption is enabled. Admitted organic work has priority; a
+cancelled synthetic retains its slot until release is confirmed. An owner-associated row has zero
 expected mining payout. Historical daily and 10% shadow artifacts remain replay
 history, not the current live policy.
 

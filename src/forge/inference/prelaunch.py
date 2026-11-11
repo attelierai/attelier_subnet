@@ -24,6 +24,8 @@ LEDGER_SCHEMA_V3 = "attelier/prelaunch-ledger/v3"
 POLICY_SCHEMA_V3 = "attelier/prelaunch-policy/v3"
 LEDGER_SCHEMA_V4 = "attelier/prelaunch-ledger/v4"
 POLICY_SCHEMA_V4 = "attelier/prelaunch-policy/v4"
+LEDGER_SCHEMA_V5 = "attelier/prelaunch-ledger/v5"
+POLICY_SCHEMA_V5 = "attelier/prelaunch-policy/v5"
 REGISTRY_SCHEMA = "attelier/prelaunch-registry/v1"
 GENESIS = "0x2f0555cc76fc2840a25a6ea3b9637146806f1f44b090c175ffde2a7e5ab36c03"
 DAY_MS = 86_400_000
@@ -610,7 +612,7 @@ def _validate_v2(
             or profile.get("resolution") not in {"480p", "768p", "1080p"}
             or profile.get("aspectRatio") not in {"16:9", "9:16"}
             or not 1 <= _integer(profile.get("maxJobSeconds"), "policy_job") <= 7_200
-            or not 1 <= _integer(profile.get("maxTtvMs"), "policy_ttv") <= 7_200_000
+            or not 1 <= _integer(profile.get("maxTtvMs"), "policy_ttv") <= 7_320_000
             or not 1 <= _integer(profile.get("rewardWorkUnits"), "policy_units") <= 1_000_000_000
             or (
                 profile.get("rewardBasis") == "pixel_frames"
@@ -1063,11 +1065,26 @@ def _simulate_v4(
 ) -> dict[str, Any]:
     """V4 reverse-auction merit: raw units define the 5% ceiling and the
     frozen bid only discounts each miner's share.  Residual stays burn."""
-    if policy.get("schema") != POLICY_SCHEMA_V4 or ledger.get("schema") != LEDGER_SCHEMA_V4:
+    v5 = policy.get("schema") == POLICY_SCHEMA_V5 or ledger.get("schema") == LEDGER_SCHEMA_V5
+    expected_policy = POLICY_SCHEMA_V5 if v5 else POLICY_SCHEMA_V4
+    expected_ledger = LEDGER_SCHEMA_V5 if v5 else LEDGER_SCHEMA_V4
+    if policy.get("schema") != expected_policy or ledger.get("schema") != expected_ledger:
         _fail("v4_namespace")
     gateway = policy.get("gatewayPolicy")
     if not isinstance(gateway, dict) or not isinstance(gateway.get("serviceProfiles"), list):
         _fail("v4_policy")
+    multiplier_bps = 10_000
+    if v5:
+        if set(gateway) != {
+            "minSuccessBps",
+            "rewardEligibility",
+            "serviceProfiles",
+            "organicRewardMultiplierBps",
+        }:
+            _fail("v5_policy")
+        multiplier_bps = _integer(gateway.get("organicRewardMultiplierBps"), "v5_multiplier")
+        if multiplier_bps != 20_000:
+            _fail("v5_multiplier")
     if (
         ledger.get("policyHash") != digest(policy)
         or ledger.get("gatewayPolicyHash") != digest(gateway)
@@ -1115,9 +1132,40 @@ def _simulate_v4(
     aggregates = ledger.get("aggregates")
     if not isinstance(admissions, list) or not isinstance(aggregates, list):
         _fail("v4_ledger")
+    # The multiplier is frozen when work is admitted, rather than when an
+    # accounting window closes.  A V4 organic request carried into a V5 close
+    # therefore remains 1x; only a V5 admission authorizes the 2x organic
+    # numerator and denominator.
+    admission_organic_multiplier: dict[str, int] = {}
+    for item in admissions:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"policyHash", "policy"}
+            or not isinstance(item["policy"], dict)
+            or item.get("policyHash") != digest(item["policy"])
+        ):
+            _fail("v4_admission_hash")
+        admission = item["policy"]
+        schema = admission.get("schema")
+        if schema == POLICY_SCHEMA_V5:
+            if not v5:
+                _fail("v4_admission")
+            admission_gateway = admission.get("gatewayPolicy")
+            if (
+                not isinstance(admission_gateway, dict)
+                or admission_gateway.get("organicRewardMultiplierBps") != 20_000
+            ):
+                _fail("v5_admission_multiplier")
+            admission_organic_multiplier[item["policyHash"]] = 20_000
+        elif schema in {POLICY_SCHEMA_V2, POLICY_SCHEMA_V3, POLICY_SCHEMA_V4}:
+            admission_organic_multiplier[item["policyHash"]] = 10_000
+        else:
+            _fail("v4_admission")
     weighted: dict[str, int] = {}
+    actual: dict[str, int] = {}
     raw: dict[str, int] = {}
     v3_rows: list[dict[str, Any]] = []
+    v5_group_identities: set[tuple[str, str, str, str, int, str]] = set()
     for row in aggregates:
         if not isinstance(row, dict):
             _fail("v4_aggregate")
@@ -1141,17 +1189,44 @@ def _simulate_v4(
             "eligibleWorkUnits",
             "eligibleWeightedWorkUnitsBps",
         }
+        if v5:
+            required.add("trafficKind")
+            required.add("eligibleRewardWorkUnits")
         if set(row) != required:
             _fail("v4_aggregate")
         bps = _integer(row["remunerationBps"], "v4_bid")
         units = _integer(row["eligibleWorkUnits"], "v4_units")
+        if v5 and row.get("trafficKind") not in {"organic", "synthetic"}:
+            _fail("v5_traffic")
+        boost = (
+            admission_organic_multiplier.get(row["admissionPolicyHash"], 10_000)
+            if v5 and row.get("trafficKind") == "organic"
+            else 10_000
+        )
+        if row["admissionPolicyHash"] not in admission_organic_multiplier:
+            _fail("v4_admission_binding")
+        if v5:
+            group_identity = (
+                row["minerHotkey"],
+                row["workerId"],
+                row["profileId"],
+                row["admissionPolicyHash"],
+                bps,
+                row["trafficKind"],
+            )
+            if group_identity in v5_group_identities:
+                _fail("v5_aggregate_duplicate")
+            v5_group_identities.add(group_identity)
+        boosted_units = units * boost // 10_000
         if (
             not 1 <= bps <= 10_000
-            or _integer(row["eligibleWeightedWorkUnitsBps"], "v4_weighted") != units * bps
+            or (v5 and _integer(row["eligibleRewardWorkUnits"], "v5_reward_units") != boosted_units)
+            or _integer(row["eligibleWeightedWorkUnitsBps"], "v4_weighted") != boosted_units * bps
         ):
             _fail("v4_bid")
         hotkey = _hotkey(row["minerHotkey"], "v4_hotkey")
-        raw[hotkey] = _safe_derived(raw.get(hotkey, 0) + units, "v4_raw")
+        actual[hotkey] = _safe_derived(actual.get(hotkey, 0) + units, "v4_raw")
+        raw[hotkey] = _safe_derived(raw.get(hotkey, 0) + boosted_units, "v4_raw")
         weighted[hotkey] = _safe_derived(
             weighted.get(hotkey, 0) + row["eligibleWeightedWorkUnitsBps"], "v4_weighted"
         )
@@ -1159,7 +1234,13 @@ def _simulate_v4(
             {
                 k: v
                 for k, v in row.items()
-                if k not in {"remunerationBps", "eligibleWeightedWorkUnitsBps"}
+                if k
+                not in {
+                    "remunerationBps",
+                    "eligibleRewardWorkUnits",
+                    "eligibleWeightedWorkUnitsBps",
+                    "trafficKind",
+                }
             }
         )
 
@@ -1171,7 +1252,15 @@ def _simulate_v4(
             **value,
             "schema": POLICY_SCHEMA_V3,
             "gatewayPolicy": {
-                **gateway_value,
+                **(
+                    {
+                        key: item
+                        for key, item in gateway_value.items()
+                        if key != "organicRewardMultiplierBps"
+                    }
+                    if value.get("schema") == POLICY_SCHEMA_V5
+                    else gateway_value
+                ),
                 "serviceProfiles": [
                     {k: v for k, v in p.items() if k != "quality"}
                     for p in gateway_value["serviceProfiles"]
@@ -1194,7 +1283,9 @@ def _simulate_v4(
         if original_hash != digest(original):
             _fail("v4_admission_hash")
         accepted = original
-        if accepted.get("schema") == POLICY_SCHEMA_V4:
+        if accepted.get("schema") == POLICY_SCHEMA_V5 and not v5:
+            _fail("v4_admission")
+        if accepted.get("schema") in {POLICY_SCHEMA_V4, POLICY_SCHEMA_V5}:
             # A V4 receipt carries quality in the hash-bound original snapshot.
             # Validate it before removing that additive field solely for V3's
             # established terminal/accounting checker.
@@ -1300,7 +1391,8 @@ def _simulate_v4(
             {
                 "uid": miner["uid"],
                 "hotkey": hotkey,
-                "eligibleWorkUnits": raw.get(hotkey, 0),
+                "eligibleWorkUnits": actual.get(hotkey, 0) if v5 else raw.get(hotkey, 0),
+                **({"boostedEligibleWorkUnits": raw.get(hotkey, 0)} if v5 else {}),
                 "eligibleWeightedWorkUnitsBps": weighted.get(hotkey, 0),
                 "proposedWeight": weight,
                 "chainExpectedMinerPayoutRao": str(expected),
@@ -1333,9 +1425,13 @@ def _simulate_v4(
         "service": {
             "windowMs": window["endMs"] - window["startMs"],
             "configuredServiceBudgetBps": policy["simulation"]["serviceBudgetBps"],
-            "eligibleWorkUnits": total_raw,
+            "eligibleWorkUnits": sum(actual.values()) if v5 else total_raw,
+            **({"boostedEligibleWorkUnits": total_raw} if v5 else {}),
             "eligibleWeightedWorkUnitsBps": total_weighted,
-            "rewardMerit": "eligibleWorkUnits*frozenRemunerationBps/10000",
+            "rewardMerit": "boostedEligibleWorkUnits*frozenRemunerationBps/10000"
+            if v5
+            else "eligibleWorkUnits*frozenRemunerationBps/10000",
+            **({"organicRewardMultiplierBps": multiplier_bps} if v5 else {}),
             "unusedServiceBudgetToBurn": True,
         },
         "unsignedProposedWeights": {
@@ -1366,7 +1462,10 @@ def _simulate_v4(
 def simulate(
     ledger: dict[str, Any], policy: dict[str, Any], registry: dict[str, Any]
 ) -> dict[str, Any]:
-    if policy.get("schema") == POLICY_SCHEMA_V4 or ledger.get("schema") == LEDGER_SCHEMA_V4:
+    if policy.get("schema") in {POLICY_SCHEMA_V4, POLICY_SCHEMA_V5} or ledger.get("schema") in {
+        LEDGER_SCHEMA_V4,
+        LEDGER_SCHEMA_V5,
+    }:
         return _simulate_v4(ledger, policy, registry)
     if policy.get("schema") == POLICY_SCHEMA_V3 or ledger.get("schema") == LEDGER_SCHEMA_V3:
         return _simulate_v3(ledger, policy, registry)
@@ -1717,6 +1816,7 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
             "routingAdmission",
             "autoProviderAdmission",
             "syntheticCapacityBps",
+            "organicPreemptionEnabled",
         }
         if v3
         else {"requireFrozenLightWindow"}
@@ -1742,11 +1842,19 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
         )
         or ("autoProviderAdmission" in config and type(config["autoProviderAdmission"]) is not bool)
         or (
+            "organicPreemptionEnabled" in config
+            and type(config["organicPreemptionEnabled"]) is not bool
+        )
+        or (
             "syntheticCapacityBps" in config
             and (
                 type(config["syntheticCapacityBps"]) is not int
                 or not 1 <= config["syntheticCapacityBps"] <= 10_000
             )
+        )
+        or (
+            config.get("syntheticCapacityBps") == 10_000
+            and config.get("organicPreemptionEnabled") is not True
         )
     ):
         _fail("prelaunch_config")
@@ -1800,7 +1908,7 @@ def _validate_prelaunch_config(config: dict[str, Any]) -> list[dict[str, Any]]:
                 or not 1
                 <= _integer(value.get("maxJobSeconds"), "prelaunch_config_profile")
                 <= 7_200
-                or not 1 <= _integer(value.get("maxTtvMs"), "prelaunch_config_profile") <= 7_200_000
+                or not 1 <= _integer(value.get("maxTtvMs"), "prelaunch_config_profile") <= 7_320_000
                 or not 1
                 <= _integer(value.get("rewardWorkUnits"), "prelaunch_config_profile")
                 <= 1_000_000_000
@@ -1945,17 +2053,13 @@ def project_prelaunch_registry(
         registered = owners.get(miner["uid"])
         if not miner["operatorEnabled"]:
             continue
-        # A stale discovered member is unavailable, not a reason to prevent
-        # refreshing every other member and the full registration snapshot.
-        # The reconciler needs that fresh snapshot to renew a valid approval.
-        if miner["autoManaged"] and (
-            miner["operatorReviewedExpires"] <= observed["reviewedAt"]
-            or registered is None
-            or registered[0] != miner["hotkey"]
-        ):
-            continue
+        # Expiry excludes only this member, including an operator-owned lease.
+        # Keep the finalized snapshot fresh for the rest of the fleet without
+        # extending an operator approval or changing accepted work/history.
         if miner["operatorReviewedExpires"] <= observed["reviewedAt"]:
-            _fail("operator_review_expired")
+            continue
+        if miner["autoManaged"] and (registered is None or registered[0] != miner["hotkey"]):
+            continue
         if registered is None or registered[0] != miner["hotkey"]:
             _fail("configured_worker_not_registered")
         workers[miner["id"]] = {
@@ -1988,7 +2092,14 @@ def project_prelaunch_registry(
         "subnetOwnerColdkey": subnet_owner,
         "miners": [
             {"uid": uid, "hotkey": owners[uid][0], "coldkey": owners[uid][1]}
-            for uid in dict.fromkeys(miner["uid"] for miner in miners if miner["id"] in workers)
+            # Chain identity is accounting evidence, not serving permission.
+            # Keep still-registered expired members so existing policy and
+            # accepted work remain verifiable. Only `workers` grants admission.
+            for uid in dict.fromkeys(
+                miner["uid"]
+                for miner in miners
+                if owners.get(miner["uid"], (None, None))[0] == miner["hotkey"]
+            )
         ],
     }
     return registry, simulation

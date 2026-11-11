@@ -20,6 +20,7 @@ from forge.chain import BittensorChain
 from forge.inference.light import (
     DOMAIN,
     DOMAIN_V4,
+    DOMAIN_V5,
     LightError,
     LightRunner,
     fetch_feed,
@@ -323,6 +324,51 @@ def _v4_feed(tmp_path, private, *, sequence=7, bid_a=6000, bid_b=10000):
     return canonical(
         {
             "schema": "attelier/light-feed/v4",
+            "keyId": hashlib.sha256(raw_key).hexdigest(),
+            "body": body,
+            "digest": digest(body),
+            "signature": base64.b64encode(signature).decode("ascii"),
+        }
+    )
+
+
+def _v5_feed(tmp_path, private):
+    envelope = json.loads(_v4_feed(tmp_path, private))
+    body = envelope["body"]
+    body["schema"] = "attelier/light-input/v5"
+    body["policy"]["schema"] = "attelier/prelaunch-policy/v5"
+    body["policy"]["gatewayPolicy"]["organicRewardMultiplierBps"] = 20_000
+    body["ledger"]["schema"] = "attelier/prelaunch-ledger/v5"
+    for row, traffic in zip(
+        body["ledger"]["aggregates"], ("synthetic", "organic", "synthetic"), strict=True
+    ):
+        row["trafficKind"] = traffic
+        row["eligibleRewardWorkUnits"] = row["eligibleWorkUnits"]
+        if traffic == "organic":
+            row["eligibleRewardWorkUnits"] *= 2
+            row["eligibleWeightedWorkUnitsBps"] *= 2
+    body["ledger"]["policyHash"] = digest(body["policy"])
+    body["ledger"]["gatewayPolicyHash"] = digest(body["policy"]["gatewayPolicy"])
+    for row in body["ledger"]["aggregates"]:
+        row["admissionPolicyHash"] = digest(body["policy"])
+    body["ledger"]["admissionPolicies"] = [
+        {"policyHash": digest(body["policy"]), "policy": body["policy"]}
+    ]
+    message = tmp_path / "v5-message"
+    message.write_bytes(DOMAIN_V5 + canonical(body))
+    signature = subprocess.run(
+        ["openssl", "pkeyutl", "-sign", "-inkey", str(private), "-rawin", "-in", str(message)],
+        check=True,
+        capture_output=True,
+    ).stdout
+    raw_key = subprocess.run(
+        ["openssl", "pkey", "-in", str(private), "-pubout", "-outform", "DER"],
+        check=True,
+        capture_output=True,
+    ).stdout[-32:]
+    return canonical(
+        {
+            "schema": "attelier/light-feed/v5",
             "keyId": hashlib.sha256(raw_key).hexdigest(),
             "body": body,
             "digest": digest(body),
@@ -1248,6 +1294,334 @@ def test_live_publisher_uses_signed_v4_discounted_vector_including_zero_merit_ro
     assert sum(expected.values()) == 65_535
     assert expected[3] != expected[4]
     assert expected[0] > 62_259
+
+
+def test_live_publisher_reads_v5_organic_weighted_feed(tmp_path):
+    private, public = _keypair(tmp_path)
+    raw = _v5_feed(tmp_path, private)
+    mismatch = json.loads(raw)
+    mismatch["body"]["policy"]["schema"] = "attelier/prelaunch-policy/v4"
+    mismatch["digest"] = digest(mismatch["body"])
+    message = tmp_path / "v5-mismatch-message"
+    message.write_bytes(DOMAIN_V5 + canonical(mismatch["body"]))
+    mismatch["signature"] = base64.b64encode(
+        subprocess.run(
+            ["openssl", "pkeyutl", "-sign", "-inkey", str(private), "-rawin", "-in", str(message)],
+            check=True,
+            capture_output=True,
+        ).stdout
+    ).decode("ascii")
+    with pytest.raises(LightError, match="light_v5_input_schema"):
+        verify_feed(canonical(mismatch), public, now_ms=7_200_001, allow_live=True)
+    body = verify_feed(raw, public, now_ms=7_200_001, allow_live=True)
+    artifact = LightRunner(
+        tmp_path / "v5-state", public, allow_live=True, registry_verifier=lambda _: None
+    ).process(raw, now_ms=7_200_001)
+
+    class Publisher:
+        def guard(self, intent):
+            return {"sequence": intent.sequence}
+
+        def submit(self, intent, _guard):
+            return {"status": "COMMITTED", "weights": intent.weights}
+
+        def reconcile(self, _intent, receipt):
+            return receipt
+
+    result = LivePublisher(LiveJournal(tmp_path / "v5.sqlite3"), Publisher()).process(
+        body, artifact
+    )
+    weights = dict(result["intent"]["relativeWeights"])
+    assert weights[4] > weights[3]
+    assert sum(weights.values()) == 65_535
+
+
+def test_bounded_continuity_preserves_bid_and_organic_shares_without_new_work(tmp_path):
+    from forge.inference.light_continuity import DOMAIN as AVAILABILITY_DOMAIN
+    from forge.inference.light_continuity import select_continuity, stop_continuity
+    from forge.inference.light_publication import publication_weights
+    from forge.inference.prelaunch import simulate
+
+    private, public = _keypair(tmp_path)
+    source = _v5_feed(tmp_path, private)
+    registry = json.loads(source)["body"]["registry"]
+    state = tmp_path / "continuity"
+    runner = LightRunner(state, public, allow_live=True, registry_verifier=lambda _: None)
+    original = runner.process(source, now_ms=7_200_001)
+    original_weights = publication_weights(json.loads(source)["body"], original)
+    preserved = (state / "latest-artifact.json").read_bytes()
+    now = 10_800_001
+
+    def snapshot(workers=(3, 4), *, at=now, identities=None, worker_suffix=""):
+        body = {
+            "schema": "attelier/light-availability-input/v1",
+            "network": "finney",
+            "genesis": GENESIS,
+            "netuid": 126,
+            "mechanism": 0,
+            "issuedAtMs": at,
+            "expiresAtMs": at + 120_000,
+            "registry": identities or registry,
+            "workers": [
+                {
+                    "uid": uid,
+                    "hotkey": {3: MINER_A, 4: MINER_B}[uid],
+                    "workerId": {3: "fixture-a", 4: "fixture-b"}[uid] + worker_suffix,
+                    "checkedAtMs": at,
+                }
+                for uid in workers
+            ],
+        }
+        message = tmp_path / "availability-message"
+        message.write_bytes(AVAILABILITY_DOMAIN + canonical(body))
+        signature = subprocess.run(
+            ["openssl", "pkeyutl", "-sign", "-inkey", str(private), "-rawin", "-in", str(message)],
+            check=True,
+            capture_output=True,
+        ).stdout
+        return canonical(
+            {
+                "schema": "attelier/light-availability/v1",
+                "keyId": hashlib.sha256(base64.b64decode(public)).hexdigest(),
+                "body": body,
+                "digest": digest(body),
+                "signature": base64.b64encode(signature).decode("ascii"),
+            }
+        )
+
+    class Publisher:
+        def guard(self, intent):
+            assert sum(intent.weights.values()) == 65_535
+            return {}
+
+        def submit(self, intent, guard):
+            return {"status": "REVEALED"}
+
+    publisher = LivePublisher(LiveJournal(state / "light.sqlite3"), Publisher())
+    empty_body = json.loads(source)["body"]
+    empty_body["ledger"]["aggregates"] = []
+    empty_body["ledger"]["sequence"] = 8
+    empty_artifact = simulate(empty_body["ledger"], empty_body["policy"], empty_body["registry"])
+    original_burn = publisher.process(empty_body, empty_artifact)
+    assert dict(original_burn["intent"]["relativeWeights"]) == {0: 65_535}
+    selected = select_continuity(runner, snapshot(), now=now, max_hours=2)
+    assert selected is not None
+    first = publisher.process(*selected)
+    assert dict(first["intent"]["relativeWeights"]) == original_weights
+    assert selected[0]["schema"] == "attelier/light-continuity-input/v1"
+    assert selected[1]["schema"] == "attelier/light-continuity-artifact/v1"
+    # Restart + a newer heartbeat must not create a new submission or deadline.
+    recovered = LightRunner(state, public, allow_live=True, registry_verifier=lambda _: None)
+    repeated = select_continuity(recovered, snapshot(at=now + 1000), now=now + 1000, max_hours=2)
+    assert repeated == selected
+    partial = select_continuity(recovered, snapshot((4,)), now=now, max_hours=2)
+    assert partial is not None
+    weights = dict(publisher.process(*partial)["intent"]["relativeWeights"])
+    assert weights == {0: 65_535 - original_weights[4], 4: original_weights[4]}
+    assert select_continuity(recovered, snapshot(()), now=now, max_hours=2) is None
+    stopped = stop_continuity(recovered, empty_body)
+    stopped_result = publisher.process(stopped, empty_artifact)
+    assert dict(stopped_result["intent"]["relativeWeights"]) == {0: 65_535}
+    assert stopped_result["intent"]["sequence"] != original_burn["intent"]["sequence"]
+    assert stop_continuity(recovered, empty_body) == stopped
+    restored = select_continuity(recovered, snapshot(), now=now, max_hours=2)
+    assert restored[0]["ledger"]["sequence"] != selected[0]["ledger"]["sequence"]
+    publisher.process(*restored)
+    assert (state / "latest-artifact.json").read_bytes() == preserved
+    with sqlite3.connect(state / "light.sqlite3") as connection:
+        assert connection.execute("SELECT count(*) FROM feed").fetchone()[0] == 1
+    changed = json.loads(json.dumps(registry))
+    changed["miners"][0]["coldkey"] = MINER_C
+    changed["miners"][1]["coldkey"] = MINER_C
+    assert select_continuity(recovered, snapshot(identities=changed), now=now, max_hours=2) is None
+    assert (
+        select_continuity(recovered, snapshot(worker_suffix="-replacement"), now=now, max_hours=2)
+        is None
+    )
+    with pytest.raises(LightError, match="signature"):
+        tampered = json.loads(snapshot())
+        tampered["body"]["expiresAtMs"] += 1
+        select_continuity(recovered, canonical(tampered), now=now, max_hours=2)
+    with pytest.raises(LightError, match="expiry"):
+        select_continuity(recovered, snapshot(), now=now + 120_000, max_hours=2)
+    deadline = 7_200_000 + 2 * 3_600_000
+    assert select_continuity(recovered, snapshot(at=deadline), now=deadline, max_hours=2) is None
+    assert select_continuity(recovered, snapshot(at=deadline), now=deadline, max_hours=6)
+    deadline6 = 7_200_000 + 6 * 3_600_000
+    assert select_continuity(recovered, snapshot(at=deadline6), now=deadline6, max_hours=6) is None
+
+
+@pytest.mark.parametrize("failure", ["empty", "transport", "signature"])
+def test_cli_continuity_selection_never_turns_integrity_failure_into_payment(tmp_path, failure):
+    """Real HTTP, CLI process and journal; only the external chain SDK is a fixture."""
+    from forge.inference.light_continuity import DOMAIN as AVAILABILITY_DOMAIN
+
+    private, public = _keypair(tmp_path)
+    envelope = json.loads(_v5_feed(tmp_path, private))
+    now = int(time.time() * 1000)
+    end = now // 3_600_000 * 3_600_000
+
+    def signed(body, schema, domain):
+        message = tmp_path / "cli-message"
+        message.write_bytes(domain + canonical(body))
+        signature = subprocess.run(
+            ["openssl", "pkeyutl", "-sign", "-inkey", str(private), "-rawin", "-in", str(message)],
+            check=True,
+            capture_output=True,
+        ).stdout
+        return canonical(
+            {
+                "schema": schema,
+                "keyId": envelope["keyId"],
+                "body": body,
+                "digest": digest(body),
+                "signature": base64.b64encode(signature).decode("ascii"),
+            }
+        )
+
+    source_body = envelope["body"]
+    source_end = end - 3_600_000
+    source_body["ledger"].update(
+        window={"startMs": source_end - 3_600_000, "endMs": source_end},
+        closedAtMs=source_end,
+    )
+    source_body.update(issuedAtMs=source_end, expiresAtMs=end)
+    state = tmp_path / "state"
+    LightRunner(state, public, allow_live=True, registry_verifier=lambda _: None).process(
+        signed(source_body, "attelier/light-feed/v5", DOMAIN_V5),
+        now_ms=source_end + 1,
+    )
+    body = json.loads(json.dumps(source_body))
+    body["ledger"].update(
+        sequence=8,
+        closedAtMs=end,
+        window={"startMs": end - 3_600_000, "endMs": end},
+        aggregates=[],
+    )
+    body.update(issuedAtMs=end, expiresAtMs=end + 3_600_000)
+    empty = signed(body, "attelier/light-feed/v5", DOMAIN_V5)
+    available = signed(
+        {
+            "schema": "attelier/light-availability-input/v1",
+            "network": "finney",
+            "genesis": GENESIS,
+            "netuid": 126,
+            "mechanism": 0,
+            "issuedAtMs": now,
+            "expiresAtMs": now + 120_000,
+            "registry": body["registry"],
+            "workers": [{"uid": 4, "hotkey": MINER_B, "workerId": "fixture-b", "checkedAtMs": now}],
+        },
+        "attelier/light-availability/v1",
+        AVAILABILITY_DOMAIN,
+    )
+    runtime = tmp_path / "runtime"
+    shutil.copytree(Path(__file__).parents[2] / "src" / "forge", runtime / "forge")
+    (runtime / "forge" / "inference" / "defaults.json").write_text(
+        json.dumps({"lightPublicKey": public}),
+        encoding="ascii",
+    )
+    (runtime / "bittensor.py").write_text(
+        f"""from types import SimpleNamespace
+class Wallet:
+    def __init__(self, **_): self.hotkey = SimpleNamespace(ss58_address="fixture")
+class Raw:
+    def __init__(self, publisher): self.publisher = publisher
+    def get_chain_finalised_head(self):
+        if self.publisher: raise RuntimeError("fixture refuses all chain writes")
+        return "finalized"
+    def get_block_number(self, _): return 1
+    def get_block_hash(self, _): return "genesis"
+class At:
+    def query(self, item, _):
+        return {{"SubnetOwner": {OWNER!r}, "MechanismCountCurrent": 1}}[item]
+    def read(self, name, **_):
+        assert name == "metagraph"
+        return {{"hotkeys": ["unused"] * 3 + [{MINER_A!r}, {MINER_B!r}, {MINER_C!r}],
+                 "coldkeys": ["unused"] * 3 + [{MINER_A!r}, {MINER_B!r}, {MINER_C!r}]}}
+instances = 0
+class Subtensor:
+    def __init__(self, **_):
+        global instances
+        instances += 1
+        self.block = 1
+        self._client = SimpleNamespace(_substrate=SimpleNamespace(raw=Raw(instances == 1)))
+    def _call(self, value): return {GENESIS!r} if value == "genesis" else value
+    def at(self, _): return At()
+    def read(self, name, **_):
+        assert name == "block_info"
+        return {{"hash": "0x" + "b" * 64}}
+    def close(self): pass
+storage = SimpleNamespace(SubtensorModule=SimpleNamespace(
+    SubnetOwner="SubnetOwner", MechanismCountCurrent="MechanismCountCurrent"))
+""",
+        encoding="utf-8",
+    )
+    requests = []
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            requests.append(self.path)
+            availability = self.path.endswith("/availability")
+            status = 503 if failure == "transport" and not availability else 200
+            payload = available if availability else empty
+            if failure == "signature" and not availability:
+                payload = payload.replace(b'"signature":"', b'"signature":"BAD')
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *_):
+            return
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "forge.inference.light",
+                "--once",
+                "--state-dir",
+                str(state),
+                "--url",
+                f"http://127.0.0.1:{server.server_port}/fixture/latest",
+                "--allow-http-fixture",
+                "--continuity-max-hours",
+                "2",
+                "--wallet.name",
+                "fixture",
+                "--wallet.hotkey",
+                "fixture",
+            ],
+            cwd=runtime,
+            env={**os.environ, "PYTHONPATH": str(runtime), "PYTEST_CURRENT_TEST": "fixture"},
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=20,
+        )
+    finally:
+        server.shutdown()
+        thread.join()
+    assert result.returncode == 1, result.stdout + result.stderr
+    with sqlite3.connect(state / "light.sqlite3") as database:
+        if failure == "signature":
+            assert requests == ["/fixture/latest"]
+            assert database.execute("SELECT count(*) FROM live_intent").fetchone()[0] == 0
+        else:
+            assert requests == ["/fixture/latest", "/fixture/availability"]
+            row = database.execute("SELECT intent,status FROM live_intent").fetchone()
+            assert row is not None, result.stdout + result.stderr
+            intent, status = row
+            assert status == "PREPARED"  # External SDK forbids every chain write.
+            intent = json.loads(intent)
+            assert {uid for uid, _ in intent["relativeWeights"]} == {0, 4}
+            assert intent["sequence"] < -1_000_000_000_000
 
 
 def test_live_publisher_reconciles_only_a_matching_pre_upgrade_v4_intent(tmp_path):

@@ -123,14 +123,17 @@ def eligible_workers(artifact: dict[str, Any]) -> dict[int, int]:
 def publication_weights(body: dict[str, Any], artifact: dict[str, Any]) -> dict[int, int]:
     """Return the relative vector frozen by the signed simulation.
 
-    V1--V3 publish their historical fixed 95/5 relative vector.  V4 is a
+    V1--V3 publish their historical fixed 95/5 relative vector.  V4/V5 are a
     reverse auction: its unsigned artifact already contains the discounted
     service allocation and its residual burn.  Re-deriving that vector from
     raw eligible work would silently erase the frozen bid.
     """
 
     policy = body.get("policy")
-    if not isinstance(policy, dict) or policy.get("schema") != "attelier/prelaunch-policy/v4":
+    if not isinstance(policy, dict) or policy.get("schema") not in {
+        "attelier/prelaunch-policy/v4",
+        "attelier/prelaunch-policy/v5",
+    }:
         return relative_vector(eligible_workers(artifact))
     unsigned = artifact.get("unsignedProposedWeights")
     rows = artifact.get("miners")

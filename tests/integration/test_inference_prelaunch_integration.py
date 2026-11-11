@@ -594,7 +594,15 @@ def test_prelaunch_registry_cli_accepts_catalog_bound_v3_profiles(tmp_path):
     config["syntheticCapacityBps"] = 10_001
     invalid, _, _, _ = run_registry_cli(tmp_path, config, snapshot)
     assert invalid.returncode != 0 and "prelaunch_config" in invalid.stderr
+    config["syntheticCapacityBps"] = 10_000
+    invalid, _, _, _ = run_registry_cli(tmp_path, config, snapshot)
+    assert invalid.returncode != 0 and "prelaunch_config" in invalid.stderr
+    config["organicPreemptionEnabled"] = True
+    result, out, _, _ = run_registry_cli(tmp_path, config, snapshot)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(out.read_text())["workers"]["fixture-owner"]["hotkey"] == OWNER_HOTKEY
     config["syntheticCapacityBps"] = 9000
+    del config["organicPreemptionEnabled"]
     config["autoProviderAdmission"] = True
     config["miners"][0]["autoManaged"] = True
     result, out, _, _ = run_registry_cli(tmp_path, config, snapshot)
@@ -923,6 +931,17 @@ def test_v4_frozen_bids_discount_the_fixed_service_pool_and_leave_residual_burn(
     result = run_cli(tmp_path, altered_snapshot, policy, registry)
     assert result.returncode != 0 and "v4_admission_hash" in result.stderr
 
+    v5_admission = copy.deepcopy(policy)
+    v5_admission["schema"] = "attelier/prelaunch-policy/v5"
+    v5_admission["gatewayPolicy"]["organicRewardMultiplierBps"] = 20_000
+    v4_with_v5_admission = copy.deepcopy(ledger)
+    v4_with_v5_admission["admissionPolicies"] = [
+        {"policyHash": digest(v5_admission), "policy": v5_admission}
+    ]
+    v4_with_v5_admission["aggregates"][0]["admissionPolicyHash"] = digest(v5_admission)
+    result = run_cli(tmp_path, v4_with_v5_admission, policy, registry)
+    assert result.returncode != 0 and "v4_admission" in result.stderr
+
     altered_outer_policy = copy.deepcopy(ledger)
     altered_outer_policy["policyHash"] = "0" * 64
     result = run_cli(tmp_path, altered_outer_policy, policy, registry)
@@ -981,10 +1000,212 @@ def test_v4_frozen_bids_discount_the_fixed_service_pool_and_leave_residual_burn(
     ]
 
 
-def test_prelaunch_registry_cli_fails_closed_for_expired_or_wrong_finalized_snapshot(tmp_path):
+def test_v5_organic_multiplier_reallocates_only_the_fixed_service_pool(tmp_path):
+    from forge.inference.prelaunch import _h3_catalog, _h3_catalog_profile
+
+    _, _, registry = inputs()
+    checkpoint = _h3_catalog()["minimax-h3-fl2va-bf16-v1"]
+    profile = {
+        "durationMs": 5000,
+        "resolution": "480p",
+        "aspectRatio": "16:9",
+        "maxJobSeconds": 180,
+        "maxTtvMs": 240000,
+        "rewardWorkUnits": 1000,
+        "rewardBasis": "pixel_frames",
+        "approvalHash": "d" * 64,
+        "quality": {
+            "schema": "attelier/h3-quality/v1",
+            "minimumOutcomes": 1,
+            "minimumSuccessBps": 9500,
+            "minimumObservationMs": 0,
+            "evidenceWindowMs": 604800000,
+            "cooldownMs": 900000,
+            "durationToleranceMs": 150,
+            "minimumVisualScoreBps": None,
+            "calibrationStatus": "measured",
+            "referenceJobId": None,
+        },
+    }
+    profile["id"], profile["hash"] = _h3_catalog_profile(profile, checkpoint)
+    workers = [
+        {
+            "minerHotkey": OWNER_HOTKEY,
+            "workerId": "fixture-owner-worker",
+            "trustMode": "operator_whitelist",
+            "profileIds": [profile["id"]],
+        },
+        {
+            "minerHotkey": OTHER,
+            "workerId": "other-worker",
+            "trustMode": "operator_whitelist",
+            "profileIds": [profile["id"]],
+        },
+    ]
+    policy = {
+        "schema": "attelier/prelaunch-policy/v5",
+        "network": "finney",
+        "genesis": GENESIS,
+        "netuid": 126,
+        "mechanism": 0,
+        "windowMs": HOUR_MS,
+        "gatewayPolicy": {
+            "minSuccessBps": 0,
+            "rewardEligibility": "per_job",
+            "serviceProfiles": [profile],
+            "organicRewardMultiplierBps": 20000,
+        },
+        "workers": workers,
+        "simulation": {
+            "serviceBudgetBps": 500,
+            "targetVideosPerDay": 240,
+            "nominalMinerEmissionRaoPerDay": "2952000000000",
+            "allocationMode": "fixed",
+        },
+    }
+
+    def aggregate(hotkey, worker, traffic, *, succeeded=1, cancelled=0):
+        units = succeeded * 1000
+        boosted = units * (2 if traffic == "organic" else 1)
+        return {
+            "minerHotkey": hotkey,
+            "workerId": worker,
+            "trustMode": "operator_whitelist",
+            "trafficKind": traffic,
+            "profileId": profile["id"],
+            "profileHash": profile["hash"],
+            "admissionPolicyHash": digest(policy),
+            "remunerationBps": 10000,
+            "attempted": succeeded + cancelled,
+            "succeeded": succeeded,
+            "failed": 0,
+            "cancelled": cancelled,
+            "inconclusive": 0,
+            "completedVideoMs": succeeded * 5000,
+            "eligibleSucceeded": succeeded,
+            "eligibleVideoMs": succeeded * 5000,
+            "slowSucceeded": 0,
+            "eligibleWorkUnits": units,
+            "eligibleRewardWorkUnits": boosted,
+            "eligibleWeightedWorkUnitsBps": boosted * 10000,
+        }
+
+    ledger = {
+        "schema": "attelier/prelaunch-ledger/v5",
+        "network": "finney",
+        "genesis": GENESIS,
+        "netuid": 126,
+        "mechanism": 0,
+        "window": {"startMs": HOUR_MS, "endMs": 2 * HOUR_MS},
+        "sequence": 1,
+        "closedAtMs": 2 * HOUR_MS + 1,
+        "policyHash": digest(policy),
+        "gatewayPolicyHash": digest(policy["gatewayPolicy"]),
+        "workerPoolHash": digest(workers),
+        "admissionPolicies": [{"policyHash": digest(policy), "policy": policy}],
+        "aggregates": [
+            aggregate(OWNER_HOTKEY, "fixture-owner-worker", "synthetic", cancelled=1),
+            aggregate(OTHER, "other-worker", "organic"),
+        ],
+    }
+    result = run_cli(tmp_path, ledger, policy, registry)
+    assert result.returncode == 0, result.stderr
+    artifact = json.loads(result.stdout)
+    assert artifact["service"]["configuredServiceBudgetBps"] == 500
+    assert artifact["service"]["eligibleWorkUnits"] == 2000
+    assert artifact["service"]["boostedEligibleWorkUnits"] == 3000
+    assert artifact["service"]["organicRewardMultiplierBps"] == 20000
+    assert artifact["unsignedProposedWeights"]["entries"] == [
+        {"kind": "miner", "uid": 3, "hotkey": OWNER_HOTKEY, "weight": 1092},
+        {"kind": "miner", "uid": 4, "hotkey": OTHER, "weight": 2184},
+        {"kind": "burn", "weight": 62259},
+    ]
+
+    # The multiplier is frozen by the admission policy.  V4 work carried into
+    # a V5 close stays at 1x even when its traffic was organic.
+    carried_v4 = copy.deepcopy(ledger)
+    v4_admission = copy.deepcopy(policy)
+    v4_admission["schema"] = "attelier/prelaunch-policy/v4"
+    del v4_admission["gatewayPolicy"]["organicRewardMultiplierBps"]
+    carried_v4["admissionPolicies"].append(
+        {"policyHash": digest(v4_admission), "policy": v4_admission}
+    )
+    carried_v4["aggregates"][1]["admissionPolicyHash"] = digest(v4_admission)
+    carried_v4["aggregates"][1]["eligibleRewardWorkUnits"] = 1000
+    carried_v4["aggregates"][1]["eligibleWeightedWorkUnitsBps"] = 10_000_000
+    result = run_cli(tmp_path, carried_v4, policy, registry)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["unsignedProposedWeights"]["entries"] == [
+        {"kind": "miner", "uid": 3, "hotkey": OWNER_HOTKEY, "weight": 1638},
+        {"kind": "miner", "uid": 4, "hotkey": OTHER, "weight": 1638},
+        {"kind": "burn", "weight": 62259},
+    ]
+
+    all_organic = copy.deepcopy(ledger)
+    all_organic["aggregates"][0]["trafficKind"] = "organic"
+    all_organic["aggregates"][0]["eligibleRewardWorkUnits"] = 2000
+    all_organic["aggregates"][0]["eligibleWeightedWorkUnitsBps"] = 20_000_000
+    result = run_cli(tmp_path, all_organic, policy, registry)
+    assert result.returncode == 0, result.stderr
+    assert (
+        sum(
+            entry["weight"]
+            for entry in json.loads(result.stdout)["unsignedProposedWeights"]["entries"]
+            if entry["kind"] == "miner"
+        )
+        == 3276
+    )
+
+    duplicate_group = copy.deepcopy(ledger)
+    duplicate_group["aggregates"].append(copy.deepcopy(duplicate_group["aggregates"][0]))
+    result = run_cli(tmp_path, duplicate_group, policy, registry)
+    assert result.returncode != 0 and "v5_aggregate_duplicate" in result.stderr
+
+    same_worker = copy.deepcopy(ledger)
+    same_worker["aggregates"][1]["minerHotkey"] = OWNER_HOTKEY
+    same_worker["aggregates"][1]["workerId"] = "fixture-owner-worker"
+    result = run_cli(tmp_path, same_worker, policy, registry)
+    assert result.returncode == 0, result.stderr
+    assert (
+        sum(
+            entry["weight"]
+            for entry in json.loads(result.stdout)["unsignedProposedWeights"]["entries"]
+            if entry["kind"] == "miner"
+        )
+        == 3276
+    )
+
+
+def test_prelaunch_registry_cli_isolates_expired_lease_and_rejects_wrong_snapshot(tmp_path):
     config, snapshot = registry_inputs(reviewed_expires=1)
-    result, _, _, _ = run_registry_cli(tmp_path, config, snapshot)
-    assert result.returncode != 0 and "operator_review_expired" in result.stderr
+    config["miners"].append(
+        dict(
+            config["miners"][0],
+            id="fixture-current",
+            uid=4,
+            hotkey=OTHER,
+            workerId="fixture-current-worker",
+            operatorReviewedExpires=2_000_000_000,
+        )
+    )
+    original = copy.deepcopy(config)
+    result, out, simulation, _ = run_registry_cli(tmp_path, config, snapshot)
+    assert result.returncode == 0, result.stderr
+    registry = json.loads(out.read_text())
+    assert set(registry["workers"]) == {"fixture-current"}
+    assert registry["uids"] == {"3": OWNER_HOTKEY, "4": OTHER}
+    assert json.loads(simulation.read_text())["miners"] == [
+        {"uid": 3, "hotkey": OWNER_HOTKEY, "coldkey": OWNER_COLDKEY},
+        {"uid": 4, "hotkey": OTHER, "coldkey": OTHER},
+    ]
+    assert json.loads((tmp_path / "config.json").read_text()) == original
+    config["miners"][1]["operatorReviewedExpires"] = 1
+    result, out, simulation, _ = run_registry_cli(tmp_path, config, snapshot)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(out.read_text())["workers"] == {}
+    assert len(json.loads(simulation.read_text())["miners"]) == 2
+    # Retained public identities do not grant work or rewards without receipts.
+    assert json.loads(out.read_text())["workers"] == {}
     config, snapshot = registry_inputs()
     snapshot["genesis"] = "0x" + "a" * 64
     result, _, _, _ = run_registry_cli(tmp_path, config, snapshot)

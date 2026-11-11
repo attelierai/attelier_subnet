@@ -59,8 +59,10 @@ polls every 60 seconds by default; commit-reveal and finalized readback can dela
 when that vector becomes effective on chain. Work still running at the boundary
 belongs to the window in which it finishes.
 
-Empty signed windows burn 100%. If the signed input remains missing
-or unavailable after 10 minutes, the outage fallback is also burn. A fresh,
+Empty signed windows or transport/age failures first try bounded continuity
+with fresh signed availability, as described below. Without eligible continuity,
+an empty window burns 100%; a missing or unavailable input falls back to burn
+after 10 minutes. A fresh,
 authenticated live receipt resumes normal publication prospectively, including
 if it arrives later in the same publication window after a fallback burn. It
 does not reverse or compensate an earlier burn. Invalid input is unavailable, never
@@ -241,3 +243,17 @@ consensus or a miner payout.
 
 See the [accounting and publication contract](INFERENCE_PRELAUNCH.md) for the
 service policy and finalized readback requirements.
+
+## Upgrading a live validator
+
+The current live feed uses V5. V4-only readers reject this schema and must be
+upgraded even when the endpoint and signing key are unchanged. Update the code
+and install its dependencies into the existing project virtual environment,
+then restart the existing validator service once. Keep its wallet, hotkey and
+state directory unchanged; do not delete the database or publication journals.
+V1–V4 history remains readable and pending submissions continue reconciliation.
+
+Continuity defaults to 2 hours and requires fresh signed availability. Choose
+`--continuity-max-hours 6` only for an explicitly selected longer grace period,
+or `0` to disable it. This changes neither the service ceiling nor the source
+deadline, and it creates no delivered-work entries.

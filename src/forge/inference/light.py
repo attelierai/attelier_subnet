@@ -38,6 +38,9 @@ DOMAIN_V3 = b"attelier/light-input/v3\0"
 ENVELOPE_SCHEMA_V4 = "attelier/light-feed/v4"
 BODY_SCHEMA_V4 = "attelier/light-input/v4"
 DOMAIN_V4 = b"attelier/light-input/v4\0"
+ENVELOPE_SCHEMA_V5 = "attelier/light-feed/v5"
+BODY_SCHEMA_V5 = "attelier/light-input/v5"
+DOMAIN_V5 = b"attelier/light-input/v5\0"
 MAX_RESPONSE_BYTES = 1_048_576
 MAX_BUDGET_BPS = 1_000
 STATUS_SCHEMA = "attelier/light-status/v1"
@@ -120,7 +123,13 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         raise urllib.error.HTTPError(args[0], 302, "redirect refused", {}, None)
 
 
-def fetch_feed(url: str, *, allow_http_fixture: bool = False, timeout_seconds: int = 15) -> bytes:
+def fetch_feed(
+    url: str,
+    *,
+    allow_http_fixture: bool = False,
+    timeout_seconds: int = 15,
+    availability: bool = False,
+) -> bytes:
     """Fetch exactly the reviewed HTTPS endpoint; HTTP is test-fixture only."""
     parsed = urllib.parse.urlparse(url)
     fixture = (
@@ -129,7 +138,7 @@ def fetch_feed(url: str, *, allow_http_fixture: bool = False, timeout_seconds: i
     production = (
         parsed.scheme == "https"
         and parsed.hostname == "inference.attelier.ai"
-        and parsed.path == "/v1/subnet/126/light/latest"
+        and parsed.path == "/v1/subnet/126/light/" + ("availability" if availability else "latest")
         and not parsed.params
         and not parsed.query
         and not parsed.fragment
@@ -171,6 +180,7 @@ def verify_feed(
         ENVELOPE_SCHEMA_V2,
         ENVELOPE_SCHEMA_V3,
         ENVELOPE_SCHEMA_V4,
+        ENVELOPE_SCHEMA_V5,
     }:
         raise LightError("light_envelope_schema")
     body = envelope.get("body")
@@ -190,7 +200,9 @@ def verify_feed(
         "registry",
     }
     expected_body = (
-        BODY_SCHEMA_V4
+        BODY_SCHEMA_V5
+        if schema == ENVELOPE_SCHEMA_V5
+        else BODY_SCHEMA_V4
         if schema == ENVELOPE_SCHEMA_V4
         else BODY_SCHEMA_V3
         if schema == ENVELOPE_SCHEMA_V3
@@ -199,7 +211,9 @@ def verify_feed(
         else BODY_SCHEMA
     )
     domain = (
-        DOMAIN_V4
+        DOMAIN_V5
+        if schema == ENVELOPE_SCHEMA_V5
+        else DOMAIN_V4
         if schema == ENVELOPE_SCHEMA_V4
         else DOMAIN_V3
         if schema == ENVELOPE_SCHEMA_V3
@@ -220,6 +234,11 @@ def verify_feed(
         raise LightError("light_mode")
     if any(not isinstance(body[key], dict) for key in ("policy", "ledger", "registry")):
         raise LightError("light_input_schema")
+    if schema == ENVELOPE_SCHEMA_V5 and (
+        body["policy"].get("schema") != "attelier/prelaunch-policy/v5"
+        or body["ledger"].get("schema") != "attelier/prelaunch-ledger/v5"
+    ):
+        raise LightError("light_v5_input_schema")
     key = _raw_public_key(public_key)
     if envelope.get("keyId") != hashlib.sha256(key).hexdigest() or envelope.get("digest") != digest(
         body
@@ -469,6 +488,13 @@ def main() -> None:
     parser.add_argument("--state-dir", type=Path, default=Path("/var/lib/attelier-light"))
     parser.add_argument("--url", default=DEFAULT_URL)
     parser.add_argument("--interval-seconds", type=int, default=60)
+    parser.add_argument(
+        "--continuity-max-hours",
+        type=int,
+        choices=[0, 2, 6],
+        default=2,
+        help="Bounded historical allocation for currently healthy workers; 0 disables",
+    )
     parser.add_argument("--once", action="store_true")
     parser.add_argument(
         "--network",
@@ -570,6 +596,24 @@ def main() -> None:
     missing = outage_state.get("missingSinceMs")
     if type(missing) is not int:
         missing = None
+
+    def continuity(now: int) -> tuple[dict[str, Any], dict[str, Any]] | None:
+        if not args.continuity_max_hours:
+            return None
+        from forge.inference.light_continuity import select_continuity
+
+        url = args.url.rsplit("/", 1)[0] + "/availability"
+        return select_continuity(
+            runner,
+            fetch_feed(
+                url,
+                availability=True,
+                allow_http_fixture=args.allow_http_fixture,
+            ),
+            now=now,
+            max_hours=args.continuity_max_hours,
+        )
+
     while True:
         try:
             raw = fetch_feed(args.url, allow_http_fixture=args.allow_http_fixture)
@@ -585,6 +629,34 @@ def main() -> None:
             # outage clock. A live SDK rate-limit or RPC issue is not a missing
             # closed feed and must never select a burn vector.
             now_ms = int(time.time() * 1000)
+            selected = None
+            # Transport and age failures can preserve availability payments.
+            # Bad signatures, replay, identities and corrupt state cannot.
+            if args.continuity_max_hours and reason in {
+                "light_feed_fetch",
+                "light_expired_or_not_yet_valid",
+            }:
+                try:
+                    selected = continuity(now_ms)
+                except Exception:
+                    print("light_continuity_unavailable", flush=True)
+            if selected is not None:
+                try:
+                    if publisher is not None:
+                        publisher.process(*selected)
+                except Exception:
+                    runner.unavailable("light_publication_unavailable")
+                    print("light_publication_unavailable", flush=True)
+                    if args.once:
+                        raise SystemExit(1) from None
+                if args.once:
+                    return
+                time.sleep(args.interval_seconds)
+                continue
+            if args.continuity_max_hours:
+                from forge.inference.light_continuity import clear_continuity
+
+                clear_continuity(runner, reset_selection=False)
             if not args.dry_run:
                 if missing is None:
                     missing = now_ms
@@ -596,7 +668,13 @@ def main() -> None:
                             "burnedThroughEndMs": outage_state.get("burnedThroughEndMs"),
                         },
                     )
-                if now_ms - missing >= 600_000 and publisher is not None:
+                from forge.inference.light_continuity import (
+                    continuity_pending_stop,
+                    stop_continuity,
+                )
+
+                stop_due = args.continuity_max_hours and continuity_pending_stop(runner)
+                if (now_ms - missing >= 600_000 or stop_due) and publisher is not None:
                     from forge.inference.light_publication import BURN_OWNER_COLDKEY
 
                     hour = now_ms // HOUR_MS
@@ -607,6 +685,8 @@ def main() -> None:
                         },
                         "registry": {"subnetOwnerColdkey": BURN_OWNER_COLDKEY, "miners": []},
                     }
+                    if stop_due:
+                        outage = stop_continuity(runner, outage)
                     # SDK ChainError inherits directly from Exception. Both
                     # preflight failures and reconciliation RPC errors must
                     # leave the journal intact for the next polling cycle.
@@ -634,6 +714,24 @@ def main() -> None:
                 }
                 _atomic_write(missing_path, outage_state)
             try:
+                if args.continuity_max_hours:
+                    from forge.inference.light_continuity import clear_continuity, stop_continuity
+                    from forge.inference.light_publication import publication_weights
+
+                    selected = None
+                    if set(publication_weights(body, artifact)) == {0}:
+                        try:
+                            selected = continuity(int(time.time() * 1000))
+                        except Exception:
+                            print("light_continuity_unavailable", flush=True)
+                    if selected is not None:
+                        body, artifact = selected
+                    else:
+                        if set(publication_weights(body, artifact)) == {0}:
+                            body = stop_continuity(runner, body)
+                            clear_continuity(runner, reset_selection=False)
+                        else:
+                            clear_continuity(runner)
                 if args.dry_run:
                     from forge.inference.light_publication import (
                         publication_weights,
