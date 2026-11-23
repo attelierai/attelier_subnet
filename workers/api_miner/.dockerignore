@@ -1,0 +1,8 @@
+target/
+state/
+.env
+.phala.env
+*.pem
+*.key
+worker.ed25519
+attestation.json

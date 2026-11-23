@@ -386,11 +386,13 @@ class LiveJournal:
                 ),
             )
 
-    def reveal_pending(self) -> list[tuple[LiveIntent, dict[str, Any]]]:
+    def reveal_pending(self, *, limit: int = 1) -> list[tuple[LiveIntent, dict[str, Any]]]:
         with self._connect() as db:
             rows = db.execute(
                 "SELECT intent, receipt FROM live_intent "
-                "WHERE status IN ('COMMITTED','REVEAL_PENDING')"
+                "WHERE status IN ('COMMITTED','REVEAL_PENDING') "
+                "ORDER BY updated_at, sequence LIMIT ?",
+                (limit,),
             ).fetchall()
         return [
             (LiveIntent.from_dict(json.loads(intent)), json.loads(receipt) if receipt else {})
@@ -428,11 +430,24 @@ class LivePublisher:
         targets[BURN_UID] = ("", owner_coldkey)
         return targets
 
-    def process(self, body: dict[str, Any], artifact: dict[str, Any]) -> dict[str, Any]:
-        # CR period can exceed the feed cadence. Keep old confirmed commits
-        # observable without blocking a newer hourly commit.
+    def process(
+        self,
+        body: dict[str, Any],
+        artifact: dict[str, Any],
+        *,
+        forced_weights: dict[int, int] | None = None,
+    ) -> dict[str, Any]:
+        # Reconcile the newest prior commit opportunistically. Historical rows
+        # remain durable evidence but an unavailable/pruned historical RPC
+        # read cannot block a fresh publication.
         for old_intent, old_receipt in self.journal.reveal_pending():
-            reconciled = self.publisher.reconcile(old_intent, old_receipt)
+            try:
+                reconciled = self.publisher.reconcile(old_intent, old_receipt)
+            except Exception:
+                self.journal.update(
+                    old_intent, old_receipt.get("status", "REVEAL_PENDING"), old_receipt
+                )
+                continue
             self.journal.update(old_intent, reconciled["status"], reconciled)
         ledger, registry = body["ledger"], body["registry"]
 
@@ -446,7 +461,7 @@ class LivePublisher:
                 targets=self._targets(registry, weights),
             )
 
-        intent = intent_for(publication_weights(body, artifact))
+        intent = intent_for(forced_weights or publication_weights(body, artifact))
         current = self.journal.existing(intent.sequence)
         if current is None:
             current = self.journal.prepare(intent)
@@ -463,7 +478,8 @@ class LivePublisher:
                 "REVEALED",
             }
             if (
-                body.get("policy", {}).get("schema") != "attelier/prelaunch-policy/v4"
+                forced_weights is not None
+                or body.get("policy", {}).get("schema") != "attelier/prelaunch-policy/v4"
                 or current["status"] not in compatible_statuses
                 or not _same_intent_except_legacy_transport(current["intent"], legacy)
             ):
@@ -518,6 +534,16 @@ class LivePublisher:
         status = receipt.get("status", "COMMITTED")
         self.journal.update(intent, status, receipt)
         return {"intent": intent.as_dict(), "status": status, "receipt": receipt}
+
+    def process_burn_only(self, body: dict[str, Any], artifact: dict[str, Any]) -> dict[str, Any]:
+        """Publish a durable all-burn vector for a valid accounting window.
+
+        The validated feed remains journalled by the caller, so this is a
+        deliberate operational pause rather than an outage fallback.  It uses
+        the same chain identity guard and commit-reveal journal as ordinary
+        publication and never lets a valid service allocation reach the chain.
+        """
+        return self.process(body, artifact, forced_weights={BURN_UID: U16_MAX})
 
 
 class SdkM0Publisher:
@@ -807,20 +833,36 @@ class SdkM0Publisher:
             submissionBlockHash=self.chain.finalized_block_hash(included),
             submissionEvents=events,
         )
-        # A committed item must remain in the pending queue until its unique
-        # reveal, so disappearance without applied weights is never success.
-        pending = self.chain.subtensor.at(head).query_map(
-            storage.SubtensorModule.TimelockedWeightCommits, [NETUID]
-        )
-        queued = [
-            entry
-            for _, entries in pending
-            for entry in (entries or [])
-            if entry[0] == self.validator_hotkey
-            and hashlib.sha256(_chain_bytes(entry[2])).hexdigest() == result["ciphertextSha256"]
-        ]
+
+        def queued_at(height: int) -> bool:
+            pending = self.chain.subtensor.at(height).query_map(
+                storage.SubtensorModule.TimelockedWeightCommits, [NETUID]
+            )
+            return any(
+                entry[0] == self.validator_hotkey
+                and hashlib.sha256(_chain_bytes(entry[2])).hexdigest() == result["ciphertextSha256"]
+                for _, entries in pending
+                for entry in (entries or [])
+            )
+
+        # Require the exact ciphertext to exist at its finalized commit and
+        # then leave the queue. Binary search bounds the archived reads even
+        # for an old journal row and identifies the only block where its
+        # attributable reveal can have occurred.
+        queued_at_head = queued_at(head)
+        departure = None
+        if not queued_at_head and queued_at(included):
+            low, high = included, head
+            while high - low > 1:
+                middle = (low + high) // 2
+                if queued_at(middle):
+                    low = middle
+                else:
+                    high = middle
+            departure = high
+        observation_block = departure if departure is not None else head
         observed = (
-            self.chain.subtensor.at(head)
+            self.chain.subtensor.at(observation_block)
             .read("weights", netuid=NETUID, mechid=MECHANISM)
             .get(result["guard"]["validatorUid"], {})
         )
@@ -829,18 +871,38 @@ class SdkM0Publisher:
         matches = set(observed) == set(requested) and all(
             abs(observed[uid] - value / total) <= 2 / U16_MAX for uid, value in requested.items()
         )
-        if matches and not queued:
+        revealed = False
+        if departure is not None:
+            for event in self.chain.subtensor.at(departure).query(storage.System.Events):
+                attributes = event.get("attributes", [])
+                if isinstance(attributes, dict):
+                    attributes = list(attributes.values())
+                if (
+                    event.get("module_id") == "SubtensorModule"
+                    and event.get("event_id") == "TimelockedWeightsRevealed"
+                    and isinstance(attributes, (list, tuple))
+                    and len(attributes) >= 2
+                    and attributes[0] == NETUID
+                    and attributes[1] == self.validator_hotkey
+                ):
+                    revealed = True
+                    break
+        # A matching old row can survive a repeated identical-vector commit.
+        # Finality needs the exact commitment's queue departure plus the own
+        # reveal event in that finalized block.
+        if revealed and matches:
             result.update(
                 status="REVEALED",
-                revealedAtBlock=head,
-                revealedAtHash=self.chain.finalized_block_hash(head),
+                revealedAtBlock=departure,
+                revealedAtHash=self.chain.finalized_block_hash(departure),
                 revealedWeights=observed,
             )
         else:
             result.update(
                 status="REVEAL_PENDING",
-                pendingCommits=len(queued),
+                pendingCommits=int(queued_at_head),
                 observedWeights=observed,
-                checkedAtBlock=head,
+                checkedAtBlock=observation_block,
+                queueDepartureBlock=departure,
             )
         return result

@@ -23,6 +23,8 @@ from forge.inference.light import (
     DOMAIN_V5,
     LightError,
     LightRunner,
+    _burn_only_sequence,
+    _outage_burn_sequence,
     fetch_feed,
     verify_feed,
 )
@@ -508,6 +510,8 @@ def test_registry_fixture_checks_finality_owner_mechanism_and_identities(monkeyp
             self.value = value
 
     class At:
+        include_reveal = True
+
         def query(self, key, _args):
             return Value({"owner": OWNER, "mechanism": 1}[key])
 
@@ -1265,6 +1269,46 @@ def test_live_journal_keeps_committed_windows_moving_and_blocks_unknown(tmp_path
         publisher.process(third, artifact)
 
 
+def test_burn_only_publication_journals_valid_work_without_allocating_to_a_worker(tmp_path):
+    class Publisher:
+        def __init__(self):
+            self.submitted = []
+
+        def guard(self, intent):
+            return {"sequence": intent.sequence}
+
+        def submit(self, intent, _guard):
+            self.submitted.append(intent)
+            return {"status": "COMMITTED"}
+
+        def reconcile(self, _intent, receipt):
+            return receipt
+
+    registry = {
+        "subnetOwnerColdkey": OWNER,
+        "miners": [{"uid": 4, "hotkey": "worker", "coldkey": "worker-cold"}],
+    }
+    body = {
+        "ledger": {"sequence": 5, "window": {"startMs": 0, "endMs": 3_600_000}},
+        "registry": registry,
+    }
+    adapter = Publisher()
+    result = LivePublisher(LiveJournal(tmp_path / "light.sqlite3"), adapter).process_burn_only(
+        body, {"miners": [{"uid": 4, "hotkey": "worker", "eligibleVideos": 99}]}
+    )
+    assert result["status"] == "COMMITTED"
+    assert adapter.submitted[0].weights == {0: 65_535}
+    assert adapter.submitted[0].targets == {0: ("", OWNER)}
+
+
+def test_burn_only_and_outage_sequences_are_idempotent_and_disjoint():
+    hour = 527_777
+    assert _burn_only_sequence(hour) == _burn_only_sequence(hour)
+    assert _burn_only_sequence(hour) != _outage_burn_sequence(hour)
+    assert _burn_only_sequence(hour) < 0 and _outage_burn_sequence(hour) < 0
+    assert _burn_only_sequence(hour) != _burn_only_sequence(hour + 1)
+
+
 def test_live_publisher_uses_signed_v4_discounted_vector_including_zero_merit_rows(tmp_path):
     private, public = _keypair(tmp_path)
     raw = _v4_feed(tmp_path, private)
@@ -1744,12 +1788,23 @@ def test_sdk_m0_persists_exact_call_before_submit_reconciles_and_blocks_uid_reus
                 "Owner": OWNER,
             }
             if name == "Events":
-                return [{"extrinsic_idx": 0, "module_id": "System", "event_id": "ExtrinsicSuccess"}]
+                events = [
+                    {"extrinsic_idx": 0, "module_id": "System", "event_id": "ExtrinsicSuccess"}
+                ]
+                if self.height == 12 and self.include_reveal:
+                    events.append(
+                        {
+                            "module_id": "SubtensorModule",
+                            "event_id": "TimelockedWeightsRevealed",
+                            "attributes": [126, "validator"],
+                        }
+                    )
+                return events
             return Value(values[name])
 
         def query_map(self, item, args):
             assert item.name == "TimelockedWeightCommits" and args == [126]
-            return []
+            return [(0, [("validator", 99, commit)])] if self.height == 11 else []
 
         def read(self, name, **kwargs):
             if name == "metagraph":
@@ -1854,6 +1909,9 @@ def test_sdk_m0_persists_exact_call_before_submit_reconciles_and_blocks_uid_reus
         )
     assert persisted["preparedCallHex"] == "0x" + Call.data.hex()
     assert persisted["ciphertextSha256"] == hashlib.sha256(commit).hexdigest()
+    At.include_reveal = False
+    assert publisher.process(body, artifact)["status"] == "REVEAL_PENDING"
+    At.include_reveal = True
     assert publisher.process(body, artifact)["status"] == "REVEALED"
 
     # Same UID with a new hotkey/coldkey cannot receive the frozen feed's 5%.

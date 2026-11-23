@@ -1,4 +1,36 @@
-# Provider guide
+# Miner guide
+
+Choose the mechanism your worker can serve. Both require a registered SN126
+hotkey and gateway admission. The same validator receives the weight vector.
+
+## Private API models · BytePlus Seedance
+
+1. Prepare a funded provider account authorized to serve the selected model.
+   The miner runs a small CPU worker in a reviewed Phala TEE. BytePlus runs Seedance.
+2. Follow the [attested worker setup](../workers/api_miner/README.md#operator-quick-start)
+   to create the persistent identity, enroll the worker and bind its reviewed
+   runtime to your hotkey and allowed model/modalities.
+3. Set `ATTELIER_PROVIDER=byteplus`, the BytePlus key and `ATTELIER_MINER_OFFERS`
+   in the encrypted deployment. For example, this quotes USD 0.50 per job:
+
+   ```json
+   [{"model":"dreamina-seedance-2-5-260628","modality":"text-to-video","quoteMicrousd":500000}]
+   ```
+
+4. Start the worker with `attelier-api-miner run`. It renews its signed offer
+   while polling. For Seedance 2.5 text-to-video it serves 720p, five or ten
+   seconds, landscape or portrait. The same total price covers either duration.
+   First-frame requests use a separate image-to-video offer with adaptive ratio.
+
+The gateway picks the lowest compatible available offer or direct provider
+quote for each organic request. It pins the winner and price at quote time.
+A completed job needs validated output, a signed receipt and settlement before
+it can contribute to the miner's share. A bid is a service valuation in USD
+micros. The subnet distributes emissions through weights. Idle time, an empty
+window and operator trials earn zero in this mechanism. Hosting can still cost
+money while the worker waits.
+
+## MiniMax H3 GPU workers
 
 SN126 inference is currently permissioned. A provider is considered only after
 operator review of its public hotkey, worker binding, profile, and expiry. A

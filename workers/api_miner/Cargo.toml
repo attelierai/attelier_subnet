@@ -1,0 +1,32 @@
+[package]
+name = "attelier-api-miner"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+license = "Apache-2.0"
+description = "Attested API-provider worker for Attelier SN126"
+publish = false
+
+[[bin]]
+name = "attelier-api-miner"
+path = "src/main.rs"
+
+[dependencies]
+base64 = "0.22"
+aes-gcm = "0.10"
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+fs2 = "0.4"
+hmac = "0.12"
+hex = "0.4"
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls-webpki-roots"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+thiserror = "1"
+url = "2"
+zeroize = "1"
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+
+[dev-dependencies]
+tempfile = "3"

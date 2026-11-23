@@ -1,4 +1,4 @@
-"""Bounded SayGM semantic sanity check, not a production quality benchmark.
+"""Optional four-frame semantic check for a Gemini-compatible inference API.
 
 Four sampled frames can miss temporal/audio defects. Negative and positive
 controls establish only that this call configuration discriminates simple visual
@@ -14,6 +14,7 @@ import json
 import os
 import subprocess
 import time
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -114,9 +115,19 @@ def assess(directory: Path, name: str, images: list[bytes], prompt: str) -> dict
         return value
     if len(list(directory.glob("*.json"))) >= 10:
         raise ValueError("Ten-call judge pilot limit reached")
-    token = os.environ.get("GM_API_KEY", "")
-    if not token:
-        raise ValueError("SayGM credential unavailable")
+    token = os.environ.get("ATTELIER_JUDGE_API_KEY", "")
+    origin = urllib.parse.urlsplit(os.environ.get("ATTELIER_JUDGE_ORIGIN", ""))
+    if (
+        not token
+        or origin.scheme != "https"
+        or not origin.hostname
+        or origin.username
+        or origin.password
+        or origin.query
+        or origin.fragment
+        or origin.path.strip("/")
+    ):
+        raise ValueError("Configure ATTELIER_JUDGE_ORIGIN and ATTELIER_JUDGE_API_KEY")
     parts = [{"text": "Requested visual scene: " + prompt}]
     for image in images:
         parts.append(
@@ -145,7 +156,7 @@ def assess(directory: Path, name: str, images: list[bytes], prompt: str) -> dict
         output.flush()
         os.fsync(output.fileno())
     request = urllib.request.Request(
-        f"https://api.saygm.com/v1beta/models/{MODEL}:generateContent",
+        f"https://{origin.netloc}/v1beta/models/{MODEL}:generateContent",
         data=canonical(body).encode(),
         headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"},
     )
@@ -188,7 +199,7 @@ def review_video(directory: Path, name: str, video: Path, prompt: str) -> dict[s
     return {
         "sha256": digest,
         "pass": candidate["passed"],
-        "judge": f"SayGM/{MODEL}",
+        "judge": MODEL,
         "controlsPassed": controls_passed,
         "reason": candidate["verdict"]["reason"],
         "receipt": str(directory / f"{name}.json"),

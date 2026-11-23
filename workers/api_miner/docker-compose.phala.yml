@@ -1,0 +1,49 @@
+services:
+  # Docker named volumes live under dstack's encrypted persistent Docker data.
+  # Do not replace this with a host-path bind: a redeployed non-dev CVM may
+  # recreate its ordinary guest filesystem and lose the worker identity.
+  state-init:
+    image: ${ATTELIER_API_MINER_IMAGE:?pin a reviewed digest}
+    user: "0:0"
+    read_only: true
+    restart: "no"
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["mkdir -p /data/attelier-api-miner && chown 10001:10001 /data/attelier-api-miner && chmod 0700 /data/attelier-api-miner"]
+    volumes:
+      - attelier-api-miner-state:/data/attelier-api-miner
+
+  api-miner:
+    image: ${ATTELIER_API_MINER_IMAGE:?pin a reviewed digest}
+    user: "10001:10001"
+    restart: unless-stopped
+    depends_on:
+      state-init:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - attelier-api-miner-state:/data/attelier-api-miner
+      - /var/run/dstack.sock:/var/run/dstack.sock
+    environment:
+      ATTELIER_MINER_STATE_DIR: /data/attelier-api-miner
+      ATTELIER_COORDINATOR_URL: ${ATTELIER_COORDINATOR_URL:?reviewed HTTPS coordinator}
+      ATTELIER_WORKER_ID: ${ATTELIER_WORKER_ID:?gateway admission ID}
+      ATTELIER_MINER_ID: ${ATTELIER_MINER_ID:?registered hotkey identity}
+      ATTELIER_PROVIDER: ${ATTELIER_PROVIDER:?byteplus|kling|google-cloud|fal}
+      ATTELIER_MINER_OFFERS: ${ATTELIER_MINER_OFFERS:-[]}
+      BYTEPLUS_API_KEY: ${BYTEPLUS_API_KEY:-}
+      # Kling v2.6 legacy API: the worker derives a short-lived HS256 JWT.
+      KLING_ACCESS_KEY: ${KLING_ACCESS_KEY:-}
+      KLING_SECRET_KEY: ${KLING_SECRET_KEY:-}
+      GOOGLE_CLOUD_ACCESS_TOKEN: ${GOOGLE_CLOUD_ACCESS_TOKEN:-}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-}
+      GOOGLE_CLOUD_OUTPUT_BUCKET: ${GOOGLE_CLOUD_OUTPUT_BUCKET:-}
+      FAL_KEY: ${FAL_KEY:-}
+    command: ["run"]
+
+volumes:
+  # Explicitly stable name: compose project names may change between updates.
+  attelier-api-miner-state:
+    name: attelier-api-miner-state

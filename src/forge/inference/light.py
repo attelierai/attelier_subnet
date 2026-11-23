@@ -24,8 +24,10 @@ from typing import Any
 
 from forge.inference.light_registry import ARCHIVE_URL, RegistryError, verify_finalized_registry
 from forge.inference.prelaunch import DAY_MS, GENESIS, HOUR_MS, canonical, digest, simulate
+from forge.inference.primary_follow import API_ALLOCATION_PUBLIC_KEY, PRIMARY_HOTKEY
 
 DEFAULT_URL = "https://inference.attelier.ai/v1/subnet/126/light/latest"
+DEFAULT_FINAL_ALLOCATION_URL = "https://inference.attelier.ai/v1/subnet/126/final-allocation/latest"
 ENVELOPE_SCHEMA = "attelier/light-feed/v1"
 BODY_SCHEMA = "attelier/light-input/v1"
 DOMAIN = b"attelier/light-input/v1\0"
@@ -44,6 +46,20 @@ DOMAIN_V5 = b"attelier/light-input/v5\0"
 MAX_RESPONSE_BYTES = 1_048_576
 MAX_BUDGET_BPS = 1_000
 STATUS_SCHEMA = "attelier/light-status/v1"
+
+
+def _burn_only_sequence(hour: int) -> int:
+    """Reserve a negative, per-hour journal sequence for an operator pause."""
+    if hour < 0:
+        raise LightError("light_burn_sequence")
+    return -(hour * 2 + 1)
+
+
+def _outage_burn_sequence(hour: int) -> int:
+    """Keep outage fallbacks disjoint from burn-only renewals."""
+    if hour < 0:
+        raise LightError("light_burn_sequence")
+    return -(hour * 2 + 2)
 
 
 class LightError(ValueError):
@@ -80,6 +96,25 @@ def _raw_public_key(value: str) -> bytes:
     if len(key) != 32:
         raise LightError("light_public_key")
     return key
+
+
+def final_allocation_public_key(path: Path) -> str:
+    """Read an explicitly pinned Ed25519 verifier key without a wallet."""
+    try:
+        raw = path.read_bytes().strip()
+        if raw.startswith(b"-----BEGIN"):
+            result = subprocess.run(
+                ["openssl", "pkey", "-pubin", "-pubcheck", "-outform", "DER", "-in", str(path)],
+                check=True,
+                capture_output=True,
+                timeout=15,
+            ).stdout
+            raw = base64.b64encode(result[-32:])
+        value = raw.decode("ascii")
+        _raw_public_key(value)
+        return value
+    except (OSError, UnicodeDecodeError, ValueError, subprocess.SubprocessError) as error:
+        raise LightError("final_allocation_public_key") from error
 
 
 def _verify_ed25519(key: bytes, message: bytes, signature: str) -> bool:
@@ -129,6 +164,7 @@ def fetch_feed(
     allow_http_fixture: bool = False,
     timeout_seconds: int = 15,
     availability: bool = False,
+    production_path: str | None = None,
 ) -> bytes:
     """Fetch exactly the reviewed HTTPS endpoint; HTTP is test-fixture only."""
     parsed = urllib.parse.urlparse(url)
@@ -138,7 +174,11 @@ def fetch_feed(
     production = (
         parsed.scheme == "https"
         and parsed.hostname == "inference.attelier.ai"
-        and parsed.path == "/v1/subnet/126/light/" + ("availability" if availability else "latest")
+        and parsed.path
+        == (
+            production_path
+            or "/v1/subnet/126/light/" + ("availability" if availability else "latest")
+        )
         and not parsed.params
         and not parsed.query
         and not parsed.fragment
@@ -486,14 +526,41 @@ def _network(value: str) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state-dir", type=Path, default=Path("/var/lib/attelier-light"))
-    parser.add_argument("--url", default=DEFAULT_URL)
+    parser.add_argument("--url", help="MiniMax gateway receipt URL")
+    parser.add_argument(
+        "--final-allocation-url",
+        metavar="URL",
+        help="Signed API-miner allocation endpoint",
+    )
+    parser.add_argument(
+        "--final-allocation-public-key-file",
+        type=Path,
+        metavar="PATH",
+        help="Pinned Ed25519 verifier key, raw base64 or public PEM",
+    )
+    parser.add_argument(
+        "--role",
+        "--api-role",
+        dest="role",
+        choices=["primary", "light"],
+        help="Primary follows the gateway. Light copies finalized primary weights.",
+    )
+    parser.add_argument(
+        "--im",
+        choices=["minimax", "api"],
+        help="Select the primary validator's incentive mechanism",
+    )
     parser.add_argument("--interval-seconds", type=int, default=60)
     parser.add_argument(
         "--continuity-max-hours",
         type=int,
         choices=[0, 2, 6],
-        default=2,
         help="Bounded historical allocation for currently healthy workers; 0 disables",
+    )
+    parser.add_argument(
+        "--burn-only",
+        action="store_true",
+        help="Publish only owner burn while authenticating and journalling feeds",
     )
     parser.add_argument("--once", action="store_true")
     parser.add_argument(
@@ -539,55 +606,123 @@ def main() -> None:
         parser.error("--interval-seconds must be positive")
     if args.allow_http_fixture and os.environ.get("PYTEST_CURRENT_TEST") is None:
         parser.error("--allow-http-fixture is restricted to an explicit test fixture")
+    if args.burn_only and args.dry_run:
+        parser.error("--burn-only requires live publication")
+    # Existing MiniMax services can select their receipt URL or continuity policy.
+    # A new community installation needs only its own wallet.
+    if args.role is None and args.im is not None:
+        args.role = "primary"
+    if (
+        args.role is None
+        and not args.burn_only
+        and not args.final_allocation_url
+        and args.url is None
+        and args.continuity_max_hours is None
+    ):
+        args.role = "light"
+    if args.role == "light" and (args.url is not None or args.continuity_max_hours is not None):
+        parser.error(
+            "light follows finalized primary weights without a gateway URL or H3 continuity"
+        )
+    args.url = args.url or DEFAULT_URL
+    if args.continuity_max_hours is None:
+        args.continuity_max_hours = 2
+    if args.role == "light" and (
+        args.im
+        or args.final_allocation_url
+        or args.final_allocation_public_key_file
+        or args.burn_only
+    ):
+        parser.error("light follows the primary on chain and takes no gateway or burn options")
+    if args.im == "minimax" and (
+        args.final_allocation_url or args.final_allocation_public_key_file
+    ):
+        parser.error("MiniMax uses the H3 receipt feed")
+    if args.im == "api":
+        args.final_allocation_url = args.final_allocation_url or DEFAULT_FINAL_ALLOCATION_URL
+    if args.burn_only and args.final_allocation_url:
+        parser.error("use --burn-only by itself to run the dedicated burn publisher")
+    if args.final_allocation_url and not args.dry_run and args.role != "primary":
+        parser.error("live API allocation requires --role primary")
+    if args.final_allocation_public_key_file and not args.final_allocation_url:
+        parser.error("an allocation key requires the API mechanism")
     if not args.dry_run and (not args.wallet or not args.hotkey):
         parser.error("--wallet.name and --wallet.hotkey are required unless --dry-run")
     try:
         # Dry-run must not advance a running writer's local state. Each CLI
         # process owns its state directory; only publication loads a wallet.
-        runner = LightRunner(
-            args.state_dir,
-            default_public_key(),
-            allow_live=True,
-            writer_lock=True,
-            registry_verifier=partial(
-                verify_finalized_registry,
-                network=ARCHIVE_URL if args.network == "finney" else args.network,
-            ),
-        )
+        if args.final_allocation_url:
+            from forge.inference.final_allocation import FinalAllocationRunner
+
+            runner = FinalAllocationRunner(
+                args.state_dir,
+                (
+                    final_allocation_public_key(args.final_allocation_public_key_file)
+                    if args.final_allocation_public_key_file
+                    else API_ALLOCATION_PUBLIC_KEY
+                ),
+                registry_verifier=partial(
+                    verify_finalized_registry,
+                    network=ARCHIVE_URL if args.network == "finney" else args.network,
+                ),
+            )
+        else:
+            runner = LightRunner(
+                args.state_dir,
+                default_public_key(),
+                allow_live=True,
+                writer_lock=True,
+                registry_verifier=partial(
+                    verify_finalized_registry,
+                    network=ARCHIVE_URL if args.network == "finney" else args.network,
+                ),
+            )
     except (LightError, OSError, sqlite3.Error, ValueError) as error:
         reason = str(error) if isinstance(error, LightError) else "light_unavailable"
         print(reason, flush=True)
         raise SystemExit(1) from error
     publisher = None
-    if not args.dry_run:
+    if not args.dry_run or args.role == "light":
         try:
             import bittensor as bt
 
             from forge.chain import BittensorChain
             from forge.inference.light_publication import LiveJournal, LivePublisher, SdkM0Publisher
 
-            wallet = bt.Wallet(
-                name=args.wallet,
-                hotkey=args.hotkey,
-                path=str(Path(args.wallet_path).expanduser())
-                if args.wallet_path
-                else str(Path.home() / ".bittensor" / "wallets"),
-            )
+            if not args.dry_run:
+                wallet = bt.Wallet(
+                    name=args.wallet,
+                    hotkey=args.hotkey,
+                    path=str(Path(args.wallet_path or "~/.bittensor/wallets").expanduser()),
+                )
+                if args.role == "primary" and wallet.hotkey.ss58_address != PRIMARY_HOTKEY:
+                    raise LightError("light_primary_signer_mismatch")
+                if args.role == "light" and wallet.hotkey.ss58_address == PRIMARY_HOTKEY:
+                    raise LightError("light_requires_independent_wallet")
             chain = BittensorChain(
                 "finney", 126, endpoint=None if args.network == "finney" else args.network
             )
-            publisher = LivePublisher(
-                LiveJournal(args.state_dir / "light.sqlite3"),
-                SdkM0Publisher(
-                    chain,
-                    wallet,
-                    wallet.hotkey.ss58_address,
-                    lock_dir=Path("/var/lib/attelier-light/publisher-locks"),
-                ),
-            )
+            if not args.dry_run:
+                publisher = LivePublisher(
+                    LiveJournal(args.state_dir / "light.sqlite3"),
+                    SdkM0Publisher(
+                        chain,
+                        wallet,
+                        wallet.hotkey.ss58_address,
+                        lock_dir=Path("/var/lib/attelier-light/publisher-locks"),
+                    ),
+                )
         except Exception as error:
             runner.unavailable("light_live_initialization")
             raise SystemExit(1) from error
+    if args.role == "light":
+        from forge.inference.primary_follow import follow_primary
+
+        try:
+            follow_primary(chain, runner, publisher, once=args.once, interval=args.interval_seconds)
+        finally:
+            chain.close()
+        return
     missing_path = args.state_dir / "live-feed-missing.json"
     try:
         outage_state = _strict_json(missing_path.read_bytes()) if missing_path.exists() else {}
@@ -616,11 +751,22 @@ def main() -> None:
 
     while True:
         try:
-            raw = fetch_feed(args.url, allow_http_fixture=args.allow_http_fixture)
-            body = verify_feed(raw, default_public_key(), allow_live=True)
-            if not args.dry_run and body["mode"] != "live":
-                raise LightError("light_live_feed_required")
-            artifact = runner.process(raw)
+            if args.final_allocation_url:
+                raw = fetch_feed(
+                    args.final_allocation_url,
+                    allow_http_fixture=args.allow_http_fixture,
+                    production_path="/v1/subnet/126/final-allocation/latest",
+                )
+                body = runner.process(raw)
+                if args.role == "primary" and body["primaryValidatorHotkey"] != PRIMARY_HOTKEY:
+                    raise LightError("light_primary_signer_mismatch")
+                artifact = None
+            else:
+                raw = fetch_feed(args.url, allow_http_fixture=args.allow_http_fixture)
+                body = verify_feed(raw, default_public_key(), allow_live=True)
+                if not args.dry_run and body["mode"] != "live":
+                    raise LightError("light_live_feed_required")
+                artifact = runner.process(raw)
         except (LightError, OSError, RuntimeError, sqlite3.Error, ValueError) as error:
             reason = str(error) if isinstance(error, LightError) else "light_unavailable"
             runner.unavailable(reason)
@@ -632,10 +778,16 @@ def main() -> None:
             selected = None
             # Transport and age failures can preserve availability payments.
             # Bad signatures, replay, identities and corrupt state cannot.
-            if args.continuity_max_hours and reason in {
-                "light_feed_fetch",
-                "light_expired_or_not_yet_valid",
-            }:
+            if (
+                not args.final_allocation_url
+                and not args.burn_only
+                and args.continuity_max_hours
+                and reason
+                in {
+                    "light_feed_fetch",
+                    "light_expired_or_not_yet_valid",
+                }
+            ):
                 try:
                     selected = continuity(now_ms)
                 except Exception:
@@ -653,11 +805,11 @@ def main() -> None:
                     return
                 time.sleep(args.interval_seconds)
                 continue
-            if args.continuity_max_hours:
+            if not args.final_allocation_url and args.continuity_max_hours:
                 from forge.inference.light_continuity import clear_continuity
 
                 clear_continuity(runner, reset_selection=False)
-            if not args.dry_run:
+            if not args.dry_run and not args.final_allocation_url:
                 if missing is None:
                     missing = now_ms
                     _atomic_write(
@@ -680,7 +832,7 @@ def main() -> None:
                     hour = now_ms // HOUR_MS
                     outage = {
                         "ledger": {
-                            "sequence": -hour,
+                            "sequence": _outage_burn_sequence(hour),
                             "window": {"startMs": (hour - 1) * HOUR_MS, "endMs": hour * HOUR_MS},
                         },
                         "registry": {"subnetOwnerColdkey": BURN_OWNER_COLDKEY, "miners": []},
@@ -714,7 +866,11 @@ def main() -> None:
                 }
                 _atomic_write(missing_path, outage_state)
             try:
-                if args.continuity_max_hours:
+                if (
+                    not args.final_allocation_url
+                    and not args.burn_only
+                    and args.continuity_max_hours
+                ):
                     from forge.inference.light_continuity import clear_continuity, stop_continuity
                     from forge.inference.light_publication import publication_weights
 
@@ -733,19 +889,26 @@ def main() -> None:
                         else:
                             clear_continuity(runner)
                 if args.dry_run:
-                    from forge.inference.light_publication import (
-                        publication_weights,
-                    )
+                    if args.final_allocation_url:
+                        from forge.inference.final_allocation import onchain_weights
+
+                        relative = onchain_weights(body)
+                    else:
+                        from forge.inference.light_publication import publication_weights
+
+                        relative = publication_weights(body, artifact)
 
                     _atomic_write(
                         args.state_dir / "live-dry-run.json",
                         {
                             "bodyDigest": digest(body),
+                            "allocationShares": (
+                                [[row["uid"], row["weight"]] for row in body["weights"]]
+                                if args.final_allocation_url
+                                else None
+                            ),
                             "relativeWeights": [
-                                [uid, weight]
-                                for uid, weight in sorted(
-                                    publication_weights(body, artifact).items()
-                                )
+                                [uid, weight] for uid, weight in sorted(relative.items())
                             ],
                         },
                     )
@@ -755,7 +918,34 @@ def main() -> None:
                     # that hour. This fresh W+1 publication is prospective;
                     # it never compensates the outage or rewrites the burn.
                     assert publisher is not None
-                    publisher.process(body, artifact)
+                    if args.final_allocation_url and args.role == "primary":
+                        from forge.inference.final_allocation import onchain_weights
+
+                        if (
+                            not publisher.publisher.validator_hotkey
+                            == body["primaryValidatorHotkey"]
+                            == PRIMARY_HOTKEY
+                        ):
+                            raise LightError("light_primary_signer_mismatch")
+                        primary_body = {
+                            "ledger": {"sequence": body["sequence"], "window": body["window"]},
+                            "registry": {
+                                "subnetOwnerColdkey": body["registry"]["subnetOwnerColdkey"],
+                                "miners": [row for row in body["weights"] if row["uid"] != 0],
+                            },
+                        }
+                        publisher.process(
+                            primary_body, {"miners": []}, forced_weights=onchain_weights(body)
+                        )
+                    elif args.burn_only:
+                        hour = body["ledger"]["window"]["endMs"] // HOUR_MS
+                        burn_body = {
+                            **body,
+                            "ledger": {**body["ledger"], "sequence": _burn_only_sequence(hour)},
+                        }
+                        publisher.process_burn_only(burn_body, artifact)
+                    else:
+                        publisher.process(body, artifact)
             except Exception as error:
                 # The SDK raises ChainError (not RuntimeError) for rate limits
                 # and RPC failures. Retry via the durable publisher on the

@@ -1,29 +1,67 @@
 # Validator guide
 
-## Default validation: light
+On Finney SN126, the default **light** validators copy the primary validator's finalized M0
+row. The **primary** reads Attelier's signed gateway feed and applies the
+selected incentive mechanism. Each validator submits from its own hotkey when
+publication is enabled. A CPU host with Python 3.12 and OpenSSL is sufficient.
 
-`attelier-validator` runs the SN126 **light validator**. No mode flag is needed.
-A light validator
-runs on a CPU host: it checks service accounting against the network policy and
-registered miner identities, then deterministically calculates the proposed
-weights. It does not serve models, download model checkpoints, rent a GPU, or
-regenerate videos. It relies on the approved gateway for the reported work;
-accounting checks do not independently prove model execution.
+## Start a light validator
 
-The release supplies the network defaults: Finney, SN126, mechanism 0, the
-reviewed gateway and policy, and indefinite one-hour UTC windows. Operators
-should not have to configure miner endpoints, generation profiles, reward
-thresholds, or the window length.
+From the repository root, install the chain dependency and run one walletless
+check. This reads finalized chain state and records the exact proposed vector.
 
-The light validator **publishes weights by default**. Start it with
-`--wallet.name NAME --wallet.hotkey NAME`; `--live` is no longer needed.
-It accepts fresh signed one-hour Finney/SN126/M0 live receipts with a maximum 500
-bps service pool. It never chooses a wallet implicitly: both names are required
-for publication. Use **`--dry-run`** to verify and simulate without loading a
-wallet, signing, or sending weights. Give dry-run its own `--state-dir`; the
-runner locks that directory to prevent simultaneous use by another process.
+```bash
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python -e '.[chain]'
+.venv/bin/attelier-validator --role light --dry-run --once --state-dir ./state/check
+```
 
-## What is available now
+For continuous publication, use your registered validator wallet and a durable
+directory writable by its service user. Provision the shared publisher lock
+directory as described below.
+
+```bash
+.venv/bin/attelier-validator --role light --wallet.name NAME --wallet.hotkey HOTKEY --state-dir ./state/light
+```
+
+You can omit `--role light`. The release pins the primary hotkey. Light checks Finney genesis, SN126/M0,
+owner UID 0, the primary's identity and validator permit, its last update and
+the target identities. It reads raw integer weights at the last finalized
+100-block boundary and journals one copy per boundary. Commit-reveal means
+changes become visible after the primary's reveal and the light validator's
+own commit follows the normal reveal schedule. If the primary is stale or the
+RPC cannot establish these checks, the light waits.
+
+## Run the primary
+
+| Mode | Input | Empty window |
+| --- | --- | --- |
+| `--role primary --im minimax` | H3 gateway receipt, profile policy and finalized registry | H3 continuity and burn policy below |
+| `--role primary --im api` | Signed hourly API allocation, accepted organic receipts and finalized registry | 100% owner burn |
+
+Use a distinct state directory per mode and preserve all publication journals.
+With the API mechanism the release supplies the gateway URL and verifier key.
+To inspect an allocation without a wallet, run:
+
+```bash
+.venv/bin/attelier-validator --role primary --im api --dry-run --once --state-dir ./state/api-check
+```
+
+The check writes `live-dry-run.json`. Its allocation shares sum to 65,535.
+`relativeWeights` contains the max-normalized integer vector for M0. Only
+the configured primary hotkey can publish the API allocation. The command for
+live publication uses the same selector, removes `--dry-run --once`, and adds
+the explicit wallet name, hotkey and a durable state directory.
+
+## Keep 100% burn during a transition
+
+Run the existing primary with `--burn-only` and its normal wallet arguments.
+It journals one owner-only vector per UTC hour. Run the API primary check in a
+separate walletless process and state directory. Switch the primary writer
+only after reconciling its existing journal. Two writers sharing one hotkey
+can collide even on different hosts. Installing this release performs no switch.
+
+## MiniMax H3 policy and existing installations
 
 The shipped CPU-only `light` runner fetches the reviewed gateway feed, verifies
 its pinned Ed25519 signature with the system OpenSSL provider, checks the
@@ -84,7 +122,7 @@ Gateway operators review provider bindings and seal the service ledger.
 Validators check those inputs, calculate the vector and publish it; they do not need to
 operate the gateway or approve miners themselves.
 
-## Run the validator
+## Existing MiniMax primary command
 
 Use Python 3.12 or later and OpenSSL 3.0 or later. From the repository root,
 create the environment if it does not exist and install the chain extra:
@@ -110,7 +148,7 @@ The systemd template provisions it for its own dedicated user instead. Start
 the validator with the installed executable:
 
 ```bash
-.venv/bin/attelier-validator --wallet.name NAME --wallet.hotkey NAME
+.venv/bin/attelier-validator --role primary --im minimax --wallet.name NAME --wallet.hotkey NAME
 ```
 
 The wallet directory defaults to `~/.bittensor/wallets` for the user running the
@@ -133,7 +171,7 @@ reserved for the integration fixture; it is not an operator option.
 To simulate one window without a wallet:
 
 ```bash
-.venv/bin/attelier-validator --dry-run --once \
+.venv/bin/attelier-validator --role primary --im minimax --dry-run --once \
   --state-dir "$HOME/.bittensor/sn126_attelier/dry-run"
 ```
 
@@ -154,7 +192,7 @@ If you already use PM2, start the executable directly from the repository root:
 ```bash
 pm2 start .venv/bin/attelier-validator \
   --name attelier-validator --interpreter none -- \
-  --wallet.name NAME --wallet.hotkey NAME
+  --role primary --im minimax --wallet.name NAME --wallet.hotkey NAME
 pm2 save
 pm2 logs attelier-validator
 ```
@@ -245,6 +283,11 @@ See the [accounting and publication contract](INFERENCE_PRELAUNCH.md) for the
 service policy and finalized readback requirements.
 
 ## Upgrading a live validator
+
+A bare wallet command now follows the primary on chain. The primary operator selects
+`--role primary --im minimax` or `--role primary --im api`. A dedicated
+`--burn-only` service keeps its current command. Explicit legacy H3 feed URLs
+and continuity settings retain their receipt-based behavior.
 
 The current live feed uses V5. V4-only readers reject this schema and must be
 upgraded even when the endpoint and signing key are unchanged. Update the code

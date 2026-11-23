@@ -1,0 +1,10 @@
+# Use only as an ignored local override for the first production enrollment.
+# It replaces the normal entrypoint; the wrapper posts private evidence and then
+# starts the normal attelier-api-miner run loop.
+services:
+  api-miner:
+    entrypoint: ["/usr/local/bin/attelier-api-miner-enroll"]
+    command: []
+    environment:
+      ATTELIER_ENROLLMENT_CHALLENGE: ${ATTELIER_ENROLLMENT_CHALLENGE:?fresh public challenge}
+      ATTELIER_ENROLLMENT_TOKEN: ${ATTELIER_ENROLLMENT_TOKEN:?sealed scoped collector token}
