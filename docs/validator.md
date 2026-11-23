@@ -63,7 +63,7 @@ can collide even on different hosts. Installing this release performs no switch.
 
 ## MiniMax H3 policy and existing installations
 
-The shipped CPU-only `light` runner fetches the reviewed gateway feed, verifies
+The MiniMax primary (`--role primary --im minimax`) fetches the reviewed gateway feed, verifies
 its pinned Ed25519 signature with the system OpenSSL provider, checks the
 Finney/SN126/M0 namespace and fresh one-hour window, then reads the registry
 block again from chain before producing the existing unsigned simulation. It
@@ -119,8 +119,8 @@ provider secret.
 The host needs OpenSSL 3.0 or later with `openssl pkeyutl` Ed25519 support.
 
 Gateway operators review provider bindings and seal the service ledger.
-Validators check those inputs, calculate the vector and publish it; they do not need to
-operate the gateway or approve miners themselves.
+The MiniMax primary verifies those inputs and calculates the vector. Community
+light validators follow the primary's finalized M0 row for either mechanism.
 
 ## Existing MiniMax primary command
 
