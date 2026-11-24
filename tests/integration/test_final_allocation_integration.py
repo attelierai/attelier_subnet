@@ -20,6 +20,149 @@ from forge.inference.final_allocation import (
 from forge.inference.prelaunch import GENESIS, HOUR_MS, canonical, digest
 
 
+@pytest.mark.parametrize("mode", [[], ["--dry-run"], ["--burn-only", "--dry-run"]])
+def test_embedded_observer_cannot_enable_reward_publication(tmp_path, mode):
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "forge.inference.light",
+            *mode,
+            "--observe-api-allocation",
+            "https://example.invalid/allocation",
+            "--observe-api-public-key-file",
+            str(tmp_path / "unused.pub"),
+            "--state-dir",
+            str(tmp_path / "state"),
+            "--once",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "requires" in result.stderr
+    assert not (tmp_path / "state").exists()
+
+
+def test_embedded_observer_recovers_without_blocking_host_or_loading_wallet(tmp_path):
+    """Real HTTP, signature, SDK boundary, journal and daemon lifecycle."""
+    import http.server
+    import os
+    import sqlite3
+    import threading
+    import time
+
+    raw, public, body, _ = _signed(
+        tmp_path,
+        window_end=int(time.time() * 1000) // HOUR_MS * HOUR_MS,
+    )
+    (tmp_path / "gateway.pub").write_text(public)
+    # Only the external SDK is replaced. Wallet/signing access is a hard failure.
+    (tmp_path / "bittensor.py").write_text(f"""
+from types import SimpleNamespace
+def Wallet(*args, **kwargs):
+    raise AssertionError("observer attempted wallet access")
+class Raw:
+    def get_chain_finalised_head(self): return "finalized"
+    def get_block_number(self, value): return 123
+    def get_block_hash(self, height): return {GENESIS!r}
+class At:
+    def query(self, item, args):
+        return {{"SubnetOwner": "owner-coldkey", "MechanismCountCurrent": 1}}[item]
+    def read(self, name, **kwargs):
+        return {{"hotkeys": ["owner-hotkey"] + ["unused"] * 6 + ["miner-hotkey"],
+                 "coldkeys": ["owner-coldkey"] + ["unused"] * 6 + ["miner-coldkey"]}}
+class Subtensor:
+    def __init__(self, **kwargs):
+        self.block = 123
+        self._client = SimpleNamespace(_substrate=SimpleNamespace(raw=Raw()))
+    def _call(self, value): return value
+    def at(self, height): return At()
+    def read(self, name, **kwargs): return {{"hash": "0x" + "a" * 64}}
+    def close(self): pass
+storage = SimpleNamespace(SubtensorModule=SimpleNamespace(
+    SubnetOwner="SubnetOwner", MechanismCountCurrent="MechanismCountCurrent"))
+""")
+    blocked, release = threading.Event(), threading.Event()
+    requests = []
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            requests.append(self.path)
+            if len(requests) == 2:
+                blocked.set()
+                release.wait(10)
+            payload = b"{}" if len(requests) == 1 else raw
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *_):
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+    script = """
+import json, time
+from pathlib import Path
+from forge.inference.allocation_observer import start_allocation_observer
+root = Path.cwd()
+worker, stop = start_allocation_observer(root / "state", URL, root / "gateway.pub",
+    network="wss://fixture.invalid", interval=0.1, allow_http_fixture=True)
+deadline = time.monotonic() + 15
+try:
+    while time.monotonic() < deadline:
+        (root / "host-heartbeat").write_text(str(time.monotonic_ns()))
+        if (root / "state/live-dry-run.json").exists():
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError("observer did not recover")
+finally:
+    stop.set()
+    worker.join(2)
+assert not worker.is_alive()
+""".replace("URL", repr(f"http://127.0.0.1:{server.server_port}/fixture"))
+    source = str(Path(__file__).parents[2] / "src")
+    process = subprocess.Popen(
+        [sys.executable, "-c", script],
+        cwd=tmp_path,
+        env={**os.environ, "PYTHONPATH": os.pathsep.join([str(tmp_path), source])},
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert blocked.wait(8)
+        status = json.loads((tmp_path / "state/observer.json").read_text())
+        assert status["status"] == "unavailable" and not status["publishable"]
+        heartbeat = (tmp_path / "host-heartbeat").read_text()
+        time.sleep(0.2)
+        assert (tmp_path / "host-heartbeat").read_text() != heartbeat
+        release.set()
+        stdout, stderr = process.communicate(timeout=15)
+        assert process.returncode == 0, stdout + stderr
+        output = json.loads((tmp_path / "state/live-dry-run.json").read_text())
+        assert output["bodyDigest"] == digest(body)
+        assert output["relativeWeights"] == [[0, 65535], [7, 3737]]
+        assert json.loads((tmp_path / "state/observer.json").read_text())["status"] == "ready"
+        with sqlite3.connect(tmp_path / "state/light.sqlite3") as db:
+            assert db.execute("SELECT COUNT(*) FROM final_allocation").fetchone() == (1,)
+            assert not db.execute(
+                "SELECT name FROM sqlite_master WHERE name='live_intent'"
+            ).fetchall()
+    finally:
+        release.set()
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+        server.shutdown()
+        server.server_close()
+        server_thread.join()
+
+
 def _signed(
     tmp_path: Path,
     *,
@@ -27,6 +170,7 @@ def _signed(
     weight: int = 3535,
     private: Path | None = None,
     primary: str = "primary-validator",
+    window_end: int = 2 * HOUR_MS,
 ) -> tuple[bytes, str, dict, Path]:
     tmp_path.mkdir(parents=True, exist_ok=True)
     private = private or tmp_path / "gateway.key"
@@ -40,11 +184,11 @@ def _signed(
         capture_output=True,
     ).stdout
     public = base64.b64encode(public_der[-32:]).decode()
-    window = {"startMs": HOUR_MS, "endMs": 2 * HOUR_MS}
+    window = {"startMs": window_end - HOUR_MS, "endMs": window_end}
     registry = {
         "finalizedBlock": 123,
         "finalizedBlockHash": "a" * 64,
-        "finalizedAtMs": 2 * HOUR_MS,
+        "finalizedAtMs": window_end,
         "subnetOwnerColdkey": "owner-coldkey",
     }
     weights = [
@@ -57,8 +201,8 @@ def _signed(
         "genesis": GENESIS,
         "netuid": 126,
         "mechanism": 0,
-        "issuedAtMs": 2 * HOUR_MS,
-        "expiresAtMs": 3 * HOUR_MS,
+        "issuedAtMs": window_end,
+        "expiresAtMs": window_end + HOUR_MS,
         "window": window,
         "sequence": sequence,
         "policyHash": "b" * 64,

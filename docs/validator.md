@@ -56,8 +56,15 @@ the explicit wallet name, hotkey and a durable state directory.
 ## Keep 100% burn during a transition
 
 Run the existing primary with `--burn-only` and its normal wallet arguments.
-It journals one owner-only vector per UTC hour. Run the API primary check in a
-separate walletless process and state directory. Switch the primary writer
+It journals one owner-only vector per UTC hour. Add
+`--observe-api-allocation URL --observe-api-public-key-file PATH` to check the
+signed API allocation inside the same process. The observer has no wallet or
+publisher and runs independently of the burn loop: unavailable or slow inputs
+do not block burn publication. Its journal and dry-run output live under
+`STATE_DIR/api-observation/`; `observer.json` records the last completed check
+and marks the result as simulation-only. A ready observer never enables API
+rewards. When consolidating an older standalone check, stop that check first
+and preserve its allocation journal in this subdirectory. Switch the primary writer
 only after reconciling its existing journal. Two writers sharing one hotkey
 can collide even on different hosts. Installing this release performs no switch.
 

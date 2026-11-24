@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import base64
 import contextlib
 import fcntl
@@ -552,6 +553,17 @@ def main() -> None:
     )
     parser.add_argument("--interval-seconds", type=int, default=60)
     parser.add_argument(
+        "--observe-api-allocation",
+        metavar="URL",
+        help="Check API allocations internally while continuing burn-only publication",
+    )
+    parser.add_argument(
+        "--observe-api-public-key-file",
+        type=Path,
+        metavar="PATH",
+        help="Pinned verifier key for the read-only API allocation observer",
+    )
+    parser.add_argument(
         "--continuity-max-hours",
         type=int,
         choices=[0, 2, 6],
@@ -608,6 +620,10 @@ def main() -> None:
         parser.error("--allow-http-fixture is restricted to an explicit test fixture")
     if args.burn_only and args.dry_run:
         parser.error("--burn-only requires live publication")
+    if (args.observe_api_allocation or args.observe_api_public_key_file) and not (
+        args.burn_only and args.observe_api_allocation and args.observe_api_public_key_file
+    ):
+        parser.error("API observation requires --burn-only, an observer URL and verifier key")
     # Existing MiniMax services can select their receipt URL or continuity policy.
     # A new community installation needs only its own wallet.
     if args.role is None and args.im is not None:
@@ -723,6 +739,21 @@ def main() -> None:
         finally:
             chain.close()
         return
+    if args.observe_api_allocation:
+        from forge.inference.allocation_observer import start_allocation_observer
+
+        observer, observer_stop = start_allocation_observer(
+            args.state_dir / "api-observation",
+            args.observe_api_allocation,
+            args.observe_api_public_key_file,
+            network=ARCHIVE_URL if args.network == "finney" else args.network,
+            interval=args.interval_seconds,
+            once=args.once,
+            allow_http_fixture=args.allow_http_fixture,
+        )
+        atexit.register(observer_stop.set)
+        if args.once:
+            observer.join(timeout=30)
     missing_path = args.state_dir / "live-feed-missing.json"
     try:
         outage_state = _strict_json(missing_path.read_bytes()) if missing_path.exists() else {}
