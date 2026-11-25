@@ -19,6 +19,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from forge.http_transport import open_same_origin
 from forge.inference.chain import atomic_json
 from forge.inference.service import canonical
 
@@ -160,7 +161,7 @@ def assess(directory: Path, name: str, images: list[bytes], prompt: str) -> dict
         data=canonical(body).encode(),
         headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(request, timeout=90) as response:
+    with open_same_origin(request, timeout=90) as response:
         raw = json.loads(response.read(2_000_000))
     usage = raw.get("usageMetadata", {})
     value.update(status="RESPONSE_RECEIVED", response=raw, costNanoUsd=usage.get("costNanoUsd"))

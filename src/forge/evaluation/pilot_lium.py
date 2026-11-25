@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from uuid import UUID
 
 from dotenv import dotenv_values
+
+from forge.http_transport import open_same_origin
 
 
 class LiumHTTPError(RuntimeError):
@@ -26,7 +29,16 @@ class LiumClient:
         self.key = dotenv_values(env_file).get("LIUM_API_KEY")
         if not self.key:
             raise ValueError("LIUM_API_KEY is missing from the project env")
-        if base_url != "https://lium.io/api" and not base_url.startswith("http://127.0.0.1:"):
+        parsed = urllib.parse.urlsplit(base_url)
+        local_fixture = (
+            parsed.scheme == "http"
+            and parsed.hostname == "127.0.0.1"
+            and parsed.username is None
+            and parsed.port is not None
+            and not parsed.query
+            and not parsed.fragment
+        )
+        if base_url != "https://lium.io/api" and not local_fixture:
             raise ValueError("only the official API or a local integration fixture is allowed")
         self.base_url = base_url.rstrip("/")
 
@@ -40,7 +52,7 @@ class LiumClient:
             method=method,
         )
         try:
-            with urllib.request.urlopen(req, timeout=20) as response:
+            with open_same_origin(req, timeout=20) as response:
                 data = response.read()
                 value = json.loads(data) if data else {}
         except urllib.error.HTTPError as error:

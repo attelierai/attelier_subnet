@@ -251,7 +251,7 @@ def test_assigned_runtime_uses_exact_frozen_prompts_and_signs_file_bound_partial
         return io.BytesIO(json.dumps(response).encode())
 
     monkeypatch.setenv("OPENAI_API_KEY", "test-only-not-a-provider-key")
-    monkeypatch.setattr("forge.evaluation.vision_judge.urllib.request.urlopen", provider_response)
+    monkeypatch.setattr("forge.evaluation.vision_judge.open_same_origin", provider_response)
     luna_judge = judge_pair
     encoded = io.BytesIO()
     Image.new("RGB", (8, 8), (1, 2, 3)).save(encoded, format="PNG")

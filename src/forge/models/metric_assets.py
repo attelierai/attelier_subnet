@@ -9,7 +9,26 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+from forge.http_transport import http_origin
 from forge.protocol.hashing import sha256_file
+
+
+class _NoDowngradeRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+        scheme, _, _ = http_origin(newurl)
+        if request.type == "https" and scheme != "https":
+            return None
+        return super().redirect_request(request, fp, code, msg, headers, newurl)
+
+
+def _http_url(value: object) -> str:
+    if not isinstance(value, str):
+        raise ValueError("metric asset URL must be a string")
+    try:
+        http_origin(value)
+    except ValueError as error:
+        raise ValueError("metric asset URL must be an HTTP(S) URL without credentials") from error
+    return value
 
 
 def provision(manifest: dict, cache: Path) -> dict[str, str]:
@@ -21,6 +40,12 @@ def provision(manifest: dict, cache: Path) -> dict[str, str]:
     cache.mkdir(parents=True, exist_ok=True)
     verified = {}
     for name, spec in sorted(manifest.items(), key=lambda item: "url" not in item[1]):
+        if not isinstance(spec, dict):
+            raise ValueError("metric asset specification must be an object")
+        expected_bytes = spec.get("bytes")
+        if type(expected_bytes) is not int or expected_bytes < 0:
+            raise ValueError("metric asset bytes must be a non-negative integer")
+        download_url = _http_url(spec["url"]) if "url" in spec else None
         target = cache / name
         if target.is_symlink() or not target.resolve().is_relative_to(cache.resolve()):
             raise ValueError("metric asset must remain inside cache")
@@ -29,8 +54,15 @@ def provision(manifest: dict, cache: Path) -> dict[str, str]:
             partial = target.with_name(target.name + ".partial")
             with partial.open("xb") as output:
                 if "url" in spec:
-                    with urllib.request.urlopen(spec["url"], timeout=60) as response:
-                        shutil.copyfileobj(response, output, length=1024 * 1024)
+                    request = urllib.request.Request(download_url)
+                    opener = urllib.request.build_opener(_NoDowngradeRedirect)
+                    with opener.open(request, timeout=60) as response:
+                        copied = 0
+                        for chunk in iter(lambda: response.read(1024 * 1024), b""):
+                            copied += len(chunk)
+                            if copied > expected_bytes:
+                                raise ValueError("metric asset exceeds declared bytes")
+                            output.write(chunk)
                 else:
                     archive = spec["archive"]
                     if archive not in verified:

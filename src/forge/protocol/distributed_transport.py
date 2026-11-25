@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from urllib.request import urlopen
+from urllib.request import Request
 
+from forge.http_transport import open_same_origin
 from forge.protocol.hashing import canonical_json_bytes, hash_canonical, sha256_bytes
 
 MAX_REPORT_BYTES = 4 * 1024 * 1024
@@ -40,9 +41,8 @@ def verify_plan_chain_context(chain, plan, commit_close_block: int) -> None:
 
 
 def _fetch_json(url: str) -> dict:
-    if not url.startswith(("https://", "http://")):
-        raise ValueError("peer report must use HTTP(S)")
-    with urlopen(url, timeout=30) as response:
+    request = Request(url, headers={"Accept": "application/json"})
+    with open_same_origin(request, timeout=30) as response:
         payload = response.read(MAX_REPORT_BYTES + 1)
     if len(payload) > MAX_REPORT_BYTES:
         raise ValueError("peer report exceeds size limit")

@@ -27,6 +27,16 @@ def test_lium_owned_closure_and_restart_preserve_other_pods(tmp_path):
 
         def do_GET(self):
             assert self.headers["X-API-Key"] == "integration-only"
+            if self.path in {"/moved", "/other-origin"}:
+                location = (
+                    "/pods"
+                    if self.path == "/moved"
+                    else f"http://localhost:{self.server.server_port}/pods"
+                )
+                self.send_response(302)
+                self.send_header("Location", location)
+                self.end_headers()
+                return
             if self.path == "/pods":
                 value = [row for row in pods if row.get("status") != "DELETING"]
             else:
@@ -92,9 +102,13 @@ def test_lium_owned_closure_and_restart_preserve_other_pods(tmp_path):
     try:
         import pytest
 
-        from forge.evaluation.pilot_lium import LiumClient
+        from forge.evaluation.pilot_lium import LiumClient, LiumHTTPError
 
         client = LiumClient(env_file, base_url=f"http://127.0.0.1:{server.server_port}")
+        assert client.request("GET", "/moved") == pods
+        with pytest.raises(LiumHTTPError) as denied_redirect:
+            client.request("GET", "/other-origin")
+        assert denied_redirect.value.status == 302
         digest = "sha256:" + "1" * 64
         assert client.running_container(ownership, digest) is None
         inventory.append(

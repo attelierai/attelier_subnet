@@ -66,7 +66,7 @@ def test_luna_pair_reuses_only_journalled_settled_orders_and_never_redispatches(
         return _Response(json.dumps(response).encode())
 
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setattr("forge.evaluation.vision_judge.urllib.request.urlopen", urlopen)
+    monkeypatch.setattr("forge.evaluation.vision_judge.open_same_origin", urlopen)
     budget = ApiBudget(tmp_path / "luna.json", 1.0, reservation_usd=0.30)
     first = judge_pair(
         "a cube moves",

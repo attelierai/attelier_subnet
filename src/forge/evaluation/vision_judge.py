@@ -18,6 +18,7 @@ import urllib.request
 import uuid
 from pathlib import Path
 
+from forge.http_transport import open_same_origin
 from forge.protocol.contract import DEFAULT_AXES
 from forge.protocol.hashing import hash_canonical, sha256_bytes, sha256_file
 
@@ -467,7 +468,7 @@ def judge_images(
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=180) as result:
+            with open_same_origin(request, timeout=180) as result:
                 response = json.load(result)
         except urllib.error.HTTPError as exc:
             # Do not print request objects, headers or provider error bodies.
