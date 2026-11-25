@@ -6,6 +6,10 @@ umask 077
 if test -n "${DSTACK_DOCKER_REGISTRY:-}"; then
     : "${DSTACK_DOCKER_USERNAME:?sealed registry username required}"
     : "${DSTACK_DOCKER_PASSWORD:?sealed registry password required}"
+    if ! mkdir -p /root/.docker 2>/dev/null; then
+        mount -t tmpfs -o mode=0700,size=4m tmpfs /root
+        mkdir -p /root/.docker
+    fi
     printf '%s' "$DSTACK_DOCKER_PASSWORD" | docker login \
         --username "$DSTACK_DOCKER_USERNAME" --password-stdin "$DSTACK_DOCKER_REGISTRY"
 fi

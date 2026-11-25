@@ -87,6 +87,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let runtime = Keys::fresh();
             let offers =
                 offers_from_config(&env::var("ATTELIER_MINER_OFFERS").unwrap_or_default())?;
+            let max_concurrency = max_concurrency_from_env()?;
             let mut renew_offers_at = 0;
             let mut first_attestation = true;
             let mut recover_runtime = true;
@@ -118,6 +119,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     recover_runtime,
                     &offers,
                     &mut renew_offers_at,
+                    if continuous { max_concurrency } else { 1 },
                 ) {
                     Ok(()) => recover_runtime = false,
                     Err(error) if continuous => eprintln!("run_error={error}"),
@@ -279,6 +281,7 @@ fn run_once(
     recover_runtime: bool,
     offers: &[Offer],
     renew_offers_at: &mut i64,
+    max_concurrency: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let coordinator =
         env::var("ATTELIER_COORDINATOR_URL").map_err(|_| "ATTELIER_COORDINATOR_URL is required")?;
@@ -315,18 +318,46 @@ fn run_once(
     if !offers.is_empty() && now >= *renew_offers_at {
         let expires_at = (now + 300_000).min(worker.attestation.expires_at);
         for offer in offers {
-            control.offer(serde_json::json!({
-                "provider": provider_name,
-                "model": offer.model,
-                "modality": offer.modality,
-                "quoteMicrousd": offer.quote_microusd,
-                "expiresAt": expires_at,
-            }))?;
+            let mut body = serde_json::Map::new();
+            body.insert("provider".into(), serde_json::json!(provider_name));
+            body.insert("model".into(), serde_json::json!(offer.model));
+            body.insert("modality".into(), serde_json::json!(offer.modality));
+            if let Some(flat) = offer.quote_microusd {
+                body.insert("quoteMicrousd".into(), serde_json::json!(flat));
+            }
+            if let Some(per_sec) = offer.quote_microusd_per_second {
+                body.insert("quoteMicrousdPerSecond".into(), serde_json::json!(per_sec));
+            }
+            if let Some(by_dur) = &offer.quotes_by_duration {
+                body.insert("quotesByDuration".into(), serde_json::json!(by_dur));
+            }
+            body.insert("expiresAt".into(), serde_json::json!(expires_at));
+            control.offer(serde_json::Value::Object(body))?;
         }
         *renew_offers_at = now + 120_000;
     }
-    println!("claimed={}", worker.run_once(&control)?);
+    let claimed = worker.run_concurrent(&control, max_concurrency)?;
+    println!("claimed={}", claimed > 0);
+    if max_concurrency > 1 {
+        println!("claimed_count={claimed}");
+    }
     Ok(())
+}
+
+fn max_concurrency_from_env() -> Result<usize, Box<dyn std::error::Error>> {
+    match env::var("ATTELIER_MAX_CONCURRENCY") {
+        Ok(raw) if !raw.trim().is_empty() => {
+            let value: usize = raw
+                .trim()
+                .parse()
+                .map_err(|_| "invalid ATTELIER_MAX_CONCURRENCY")?;
+            if !(1..=32).contains(&value) {
+                return Err("ATTELIER_MAX_CONCURRENCY must be between 1 and 32".into());
+            }
+            Ok(value)
+        }
+        _ => Ok(1),
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -334,8 +365,15 @@ fn run_once(
 struct Offer {
     model: String,
     modality: String,
-    quote_microusd: u64,
+    #[serde(default)]
+    quote_microusd: Option<u64>,
+    #[serde(default)]
+    quote_microusd_per_second: Option<u64>,
+    #[serde(default)]
+    quotes_by_duration: Option<std::collections::BTreeMap<String, u64>>,
 }
+
+const MAX_JS_SAFE_INT: u64 = 9_007_199_254_740_991;
 
 fn offers_from_config(raw: &str) -> Result<Vec<Offer>, Box<dyn std::error::Error>> {
     if raw.trim().is_empty() {
@@ -344,14 +382,70 @@ fn offers_from_config(raw: &str) -> Result<Vec<Offer>, Box<dyn std::error::Error
     let offers: Vec<Offer> = serde_json::from_str(raw)?;
     let mut seen = std::collections::HashSet::new();
     for offer in &offers {
+        let flat_ok = offer
+            .quote_microusd
+            .is_some_and(|v| (1..=MAX_JS_SAFE_INT).contains(&v));
+        let per_sec_ok = offer
+            .quote_microusd_per_second
+            .is_some_and(|v| (1..=MAX_JS_SAFE_INT).contains(&v));
+        let by_dur_ok = offer.quotes_by_duration.as_ref().is_some_and(|map| {
+            !map.is_empty()
+                && map.len() <= 30
+                && map.iter().all(|(k, v)| {
+                    k.parse::<u8>().is_ok_and(|d| (1..=30).contains(&d) && k == &d.to_string())
+                        && (1..=MAX_JS_SAFE_INT).contains(v)
+                })
+        });
         if offer.model.is_empty()
             || offer.model.len() > 160
             || !matches!(offer.modality.as_str(), "text-to-video" | "image-to-video")
-            || !(1..=9_007_199_254_740_991).contains(&offer.quote_microusd)
+            || (offer.quote_microusd.is_some() && !flat_ok)
+            || (offer.quote_microusd_per_second.is_some() && !per_sec_ok)
+            || (offer.quotes_by_duration.is_some() && !by_dur_ok)
+            || !(flat_ok || per_sec_ok || by_dur_ok)
             || !seen.insert((&offer.model, &offer.modality))
         {
             return Err("invalid or duplicate miner offer".into());
         }
     }
     Ok(offers)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn offers_from_config_accepts_duration_aware_and_flat_offers() {
+        let parsed = offers_from_config(
+            r#"[
+              {"model":"dreamina-seedance-2-5-260628","modality":"text-to-video","quoteMicrousdPerSecond":20000,"quotesByDuration":{"5":95000,"10":180000}},
+              {"model":"dreamina-seedance-2-5-260628","modality":"image-to-video","quoteMicrousd":100000}
+            ]"#,
+        )
+        .unwrap();
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].quote_microusd_per_second, Some(20_000));
+        assert_eq!(
+            parsed[0]
+                .quotes_by_duration
+                .as_ref()
+                .and_then(|m| m.get("5"))
+                .copied(),
+            Some(95_000)
+        );
+        assert_eq!(parsed[1].quote_microusd, Some(100_000));
+    }
+
+    #[test]
+    fn offers_from_config_rejects_empty_or_invalid_duration_keys() {
+        assert!(offers_from_config(
+            r#"[{"model":"dreamina-seedance-2-5-260628","modality":"text-to-video"}]"#
+        )
+        .is_err());
+        assert!(offers_from_config(
+            r#"[{"model":"dreamina-seedance-2-5-260628","modality":"text-to-video","quotesByDuration":{"05":95000}}]"#
+        )
+        .is_err());
+    }
 }

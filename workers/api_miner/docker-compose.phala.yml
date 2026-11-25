@@ -32,6 +32,7 @@ services:
       ATTELIER_MINER_ID: ${ATTELIER_MINER_ID:?registered hotkey identity}
       ATTELIER_PROVIDER: ${ATTELIER_PROVIDER:?byteplus|kling|google-cloud|fal}
       ATTELIER_MINER_OFFERS: ${ATTELIER_MINER_OFFERS:-[]}
+      ATTELIER_MAX_CONCURRENCY: ${ATTELIER_MAX_CONCURRENCY:-1}
       BYTEPLUS_API_KEY: ${BYTEPLUS_API_KEY:-}
       # Kling v2.6 legacy API: the worker derives a short-lived HS256 JWT.
       KLING_ACCESS_KEY: ${KLING_ACCESS_KEY:-}
