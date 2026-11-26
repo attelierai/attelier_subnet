@@ -1,7 +1,7 @@
 # Miner Guide (SN126)
 
 Attelier SN126 supports **two miner lanes** feeding Finney Mechanism 0:
-1. **Private API TEE (`api_miner`, Active)** — Lightweight CPU worker running inside a reviewed **Phala Intel TDX** enclave, serving private video models (starting with BytePlus Seedance) via signed reverse-auction offers.
+1. **Private API TEE (`api_miner`, Active)** — Lightweight CPU worker running inside a reviewed **Phala Intel TDX** enclave, supporting the full frontier video & image catalog (Seedance, Kling 4.0/3/2.6, Veo 3.1, MiniMax H3, Wan 3.0, FLUX 3 Max, Nano Banana, FLUX 2 Flash, Seedream 5 Lite) via signed reverse-auction offers. Production rolls out **Seedance first** (`enabledModels` gateway allowlist) and enables additional families incrementally with zero worker re-attestation.
 2. **MiniMax H3 GPU (Paused)** — Dedicated GPU workers serving pinned open-weights checkpoints under reviewed profiles.
 
 Both lanes require a registered Finney SN126 hotkey and operator review before receiving routed traffic. Monitor live status, attestation expiry, signed offers, 24h activity, and sealed hourly rewards in the **[Provider Console](https://console.attelier.ai/manage)** and **[Providers Dashboard](https://providers.attelier.ai)**.

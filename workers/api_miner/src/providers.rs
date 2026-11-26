@@ -41,12 +41,29 @@ impl DirectProvider {
     pub(crate) fn fal_app(model: &str) -> Result<&'static str> {
         match model {
             "bytedance/seedance-2.5/text-to-video" => Ok("bytedance/seedance-2.5"),
-            "bytedance/seedance-2.0/fast/image-to-video" => Ok("bytedance/seedance-2.0"),
+            "bytedance/seedance-2.0/text-to-video"
+            | "bytedance/seedance-2.0/image-to-video"
+            | "bytedance/seedance-2.0/fast/text-to-video"
+            | "bytedance/seedance-2.0/fast/image-to-video" => Ok("bytedance/seedance-2.0"),
             "fal-ai/kling-video/v3/turbo/standard/text-to-video" => Ok("fal-ai/kling-video"),
             "fal-ai/veo3.1"
             | "fal-ai/veo3.1/fast"
             | "fal-ai/veo3.1/image-to-video"
             | "fal-ai/veo3.1/fast/image-to-video" => Ok("fal-ai/veo3.1"),
+            "minimax/h3-max/text-to-video" => Ok("minimax/h3-max"),
+            "alibaba/wan-3.0/text-to-video" => Ok("alibaba/wan-3.0"),
+            "blackforestlabs/flux-3-max/text-to-video"
+            | "blackforestlabs/flux-3-max/image-to-video" => Ok("blackforestlabs/flux-3-max"),
+            "fal-ai/nano-banana-pro" | "fal-ai/nano-banana-pro/edit" => {
+                Ok("fal-ai/nano-banana-pro")
+            }
+            "google/nano-banana-2.1" | "google/nano-banana-2.1/edit" => {
+                Ok("google/nano-banana-2.1")
+            }
+            "fal-ai/flux-2/flash" | "fal-ai/flux-2/flash/edit" => Ok("fal-ai/flux-2"),
+            "bytedance/seedream/v5/lite/text-to-image" | "bytedance/seedream/v5/lite/edit" => {
+                Ok("bytedance/seedream")
+            }
             _ => Err(Error::Protocol("provider_model_not_approved")),
         }
     }
@@ -64,7 +81,7 @@ impl DirectProvider {
         ))
         .map_err(|_| Error::Protocol("provider_reference_invalid"))
     }
-    fn approved_model(provider: &str, model: &str) -> bool {
+    pub(crate) fn approved_model(provider: &str, model: &str) -> bool {
         match provider {
             "byteplus" => matches!(
                 model,
@@ -75,19 +92,16 @@ impl DirectProvider {
             ),
             "kling" => model == "kling-v2-6",
             "google-cloud" => matches!(model, "veo-3.1-generate-001" | "veo-3.1-fast-generate-001"),
-            // These are the two existing Attelier remote-provider definitions
-            // whose text-only schemas are the same. Adding a model is a
-            // release/review change, never a caller-selected endpoint or body.
-            "fal" => matches!(
+            "atlascloud" => matches!(
                 model,
-                "bytedance/seedance-2.5/text-to-video"
-                    | "fal-ai/kling-video/v3/turbo/standard/text-to-video"
-                    | "bytedance/seedance-2.0/fast/image-to-video"
-                    | "fal-ai/veo3.1"
-                    | "fal-ai/veo3.1/fast"
-                    | "fal-ai/veo3.1/image-to-video"
-                    | "fal-ai/veo3.1/fast/image-to-video"
+                "kwaivgi/kling-v4.0/text-to-video"
+                    | "kwaivgi/kling-v4.0/image-to-video"
+                    | "kwaivgi/kling-image-v4.0/text-to-image"
+                    | "minimax/h3-developer/text-to-video"
             ),
+            // Every fal route is pinned explicitly in fal_app; adding a model
+            // is a reviewed release change, never a caller-selected endpoint.
+            "fal" => Self::fal_app(model).is_ok(),
             _ => false,
         }
     }
@@ -97,6 +111,7 @@ impl DirectProvider {
             "kling" => "",
             "google-cloud" => "GOOGLE_CLOUD_ACCESS_TOKEN",
             "fal" => "FAL_KEY",
+            "atlascloud" => "ATLASCLOUD_API_KEY",
             _ => return Err(Error::Protocol("unsupported_provider")),
         };
         let key = if provider == "kling" {
@@ -244,6 +259,7 @@ impl DirectProvider {
    "byteplus"=>"https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
    "kling"=>if modality=="image-to-video"{"https://api-singapore.klingai.com/v1/videos/image2video"}else{"https://api-singapore.klingai.com/v1/videos/text2video"},
    "google-cloud"=>return reqwest::Url::parse(&format!("https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/{}:predictLongRunning",self.google_location.as_deref().ok_or(Error::Protocol("google_cloud_project_or_location"))?,self.google_project.as_deref().ok_or(Error::Protocol("google_cloud_project_or_location"))?,self.google_location.as_deref().ok_or(Error::Protocol("google_cloud_project_or_location"))?,model)).map_err(|_|Error::Protocol("provider_endpoint")),
+   "atlascloud"=>if matches!(modality,"text-to-image"|"image-to-image"){"https://api.atlascloud.ai/api/v1/model/generateImage"}else{"https://api.atlascloud.ai/api/v1/model/generateVideo"},
    "fal"=>{
        if model.contains("..") || !model.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b==b'/' || b==b'.' || b==b'_' || b==b'-') { return Err(Error::Protocol("provider_model_invalid")); }
        return reqwest::Url::parse(&format!("https://queue.fal.run/{model}")).map_err(|_|Error::Protocol("provider_endpoint"));
@@ -253,7 +269,7 @@ impl DirectProvider {
         reqwest::Url::parse(endpoint).map_err(|_| Error::Protocol("provider_endpoint"))
     }
     fn reference(value: &Value) -> Option<String> {
-        ["/id", "/task_id", "/data/task_id", "/name", "/request_id"]
+        ["/id", "/task_id", "/data/id", "/data/task_id", "/name", "/request_id"]
             .iter()
             .find_map(|path| {
                 value
@@ -285,6 +301,7 @@ impl DirectProvider {
      // Vertex Veo is polled through the documented model operation method,
      // rather than treating an operation name as a generic REST resource.
      "google-cloud"=>format!("https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/{}:fetchPredictOperation",self.google_location.as_deref().ok_or(Error::Protocol("google_cloud_project_or_location"))?,self.google_project.as_deref().ok_or(Error::Protocol("google_cloud_project_or_location"))?,self.google_location.as_deref().ok_or(Error::Protocol("google_cloud_project_or_location"))?,a.model),
+     "atlascloud"=>format!("https://api.atlascloud.ai/api/v1/model/prediction/{encoded}"),
      "fal"=>return Self::fal_status_url(&a.model,&encoded),
      _=>return Err(Error::Protocol("unsupported_provider")),
    };
@@ -295,9 +312,19 @@ impl DirectProvider {
             .request
             .as_object()
             .ok_or(Error::Protocol("provider_request_invalid"))?;
+        let is_image_output = matches!(a.modality.as_str(), "text-to-image" | "image-to-image");
+        let needs_image_input = matches!(a.modality.as_str(), "image-to-video" | "image-to-image");
         if object.keys().any(|key| {
-            !matches!(key.as_str(), "prompt" | "duration" | "aspectRatio")
-                && !(key == "imageId" && a.modality == "image-to-video")
+            let allowed = if is_image_output {
+                matches!(
+                    key.as_str(),
+                    "prompt" | "aspectRatio" | "resolution" | "imageSize"
+                ) || (key == "imageId" && needs_image_input)
+            } else {
+                matches!(key.as_str(), "prompt" | "duration" | "aspectRatio")
+                    || (key == "imageId" && needs_image_input)
+            };
+            !allowed
         }) {
             return Err(Error::Protocol("provider_request_unsupported"));
         }
@@ -307,6 +334,114 @@ impl DirectProvider {
             .filter(|v| !v.trim().is_empty() && v.len() <= 8_000)
             .ok_or(Error::Protocol("provider_prompt_invalid"))?
             .trim();
+        let image = || -> Result<&AssignmentInput> {
+            a.inputs
+                .first()
+                .ok_or(Error::Protocol("assignment_image_required"))
+        };
+        if needs_image_input {
+            if let Some(image_id) = object.get("imageId") {
+                if image_id.as_str() != a.inputs.first().map(|input| input.id.as_str()) {
+                    return Err(Error::Protocol("assignment_image_id_mismatch"));
+                }
+            }
+        }
+        let data_uri =
+            |input: &AssignmentInput| format!("data:{};base64,{}", input.mime, input.bytes_base64);
+
+        if is_image_output {
+            let img_aspect = object.get("aspectRatio").and_then(Value::as_str).filter(|v| {
+                matches!(
+                    *v,
+                    "auto"
+                        | "21:9"
+                        | "16:9"
+                        | "3:2"
+                        | "4:3"
+                        | "5:4"
+                        | "1:1"
+                        | "4:5"
+                        | "3:4"
+                        | "2:3"
+                        | "9:16"
+                )
+            });
+            let img_size = object.get("imageSize").and_then(Value::as_str).filter(|v| {
+                matches!(
+                    *v,
+                    "square"
+                        | "square_hd"
+                        | "portrait_4_3"
+                        | "portrait_16_9"
+                        | "landscape_4_3"
+                        | "landscape_16_9"
+                )
+            });
+            let img_res = object.get("resolution").and_then(Value::as_str);
+            return Ok(match (a.provider.as_str(), a.model.as_str(), a.modality.as_str()) {
+                ("atlascloud", "kwaivgi/kling-image-v4.0/text-to-image", "text-to-image") => {
+                    let resolution = match img_res.unwrap_or("2k") {
+                        "2k" | "4k" => img_res.unwrap_or("2k"),
+                        _ => return Err(Error::Protocol("provider_request_unsupported")),
+                    };
+                    serde_json::json!({"model":a.model,"prompt":prompt,"resolution":resolution,"num_images":1,"aspect_ratio":img_aspect.unwrap_or("auto")})
+                }
+                ("atlascloud", "kwaivgi/kling-image-v4.0/text-to-image", "image-to-image") => {
+                    let resolution = match img_res.unwrap_or("2k") {
+                        "2k" | "4k" => img_res.unwrap_or("2k"),
+                        _ => return Err(Error::Protocol("provider_request_unsupported")),
+                    };
+                    let input = image()?;
+                    serde_json::json!({"model":a.model,"prompt":prompt,"resolution":resolution,"num_images":1,"aspect_ratio":img_aspect.unwrap_or("auto"),"reference_images":[data_uri(input)]})
+                }
+                ("fal", "fal-ai/nano-banana-pro", "text-to-image") => {
+                    let resolution = match img_res.unwrap_or("1K") {
+                        "1K" | "2K" | "4K" => img_res.unwrap_or("1K"),
+                        _ => return Err(Error::Protocol("provider_request_unsupported")),
+                    };
+                    serde_json::json!({"prompt":prompt,"num_images":1,"aspect_ratio":img_aspect.unwrap_or("16:9"),"resolution":resolution,"output_format":"png","safety_tolerance":"4","enable_web_search":false,"limit_generations":true})
+                }
+                ("fal", "fal-ai/nano-banana-pro/edit", "image-to-image") => {
+                    let resolution = match img_res.unwrap_or("1K") {
+                        "1K" | "2K" | "4K" => img_res.unwrap_or("1K"),
+                        _ => return Err(Error::Protocol("provider_request_unsupported")),
+                    };
+                    let input = image()?;
+                    serde_json::json!({"prompt":prompt,"num_images":1,"aspect_ratio":img_aspect.unwrap_or("auto"),"resolution":resolution,"output_format":"png","safety_tolerance":"4","enable_web_search":false,"limit_generations":true,"image_urls":[data_uri(input)]})
+                }
+                ("fal", "google/nano-banana-2.1", "text-to-image") => {
+                    let resolution = match img_res.unwrap_or("1K") {
+                        "1K" | "2K" | "4K" => img_res.unwrap_or("1K"),
+                        _ => return Err(Error::Protocol("provider_request_unsupported")),
+                    };
+                    serde_json::json!({"prompt":prompt,"num_images":1,"aspect_ratio":img_aspect.unwrap_or("auto"),"resolution":resolution,"output_format":"png","safety_tolerance":"4","enable_web_search":false,"limit_generations":true,"thinking_level":"medium"})
+                }
+                ("fal", "google/nano-banana-2.1/edit", "image-to-image") => {
+                    let resolution = match img_res.unwrap_or("1K") {
+                        "1K" | "2K" | "4K" => img_res.unwrap_or("1K"),
+                        _ => return Err(Error::Protocol("provider_request_unsupported")),
+                    };
+                    let input = image()?;
+                    serde_json::json!({"prompt":prompt,"num_images":1,"aspect_ratio":img_aspect.unwrap_or("auto"),"resolution":resolution,"output_format":"png","safety_tolerance":"4","enable_web_search":false,"limit_generations":true,"thinking_level":"medium","image_urls":[data_uri(input)]})
+                }
+                ("fal", "fal-ai/flux-2/flash", "text-to-image") => {
+                    serde_json::json!({"prompt":prompt,"guidance_scale":2.5,"image_size":img_size.unwrap_or("landscape_4_3"),"num_images":1,"enable_prompt_expansion":false,"enable_safety_checker":true,"output_format":"png"})
+                }
+                ("fal", "fal-ai/flux-2/flash/edit", "image-to-image") => {
+                    let input = image()?;
+                    serde_json::json!({"prompt":prompt,"guidance_scale":2.5,"image_size":img_size.unwrap_or("square_hd"),"num_images":1,"enable_prompt_expansion":false,"enable_safety_checker":true,"output_format":"png","image_urls":[data_uri(input)]})
+                }
+                ("fal", "bytedance/seedream/v5/lite/text-to-image", "text-to-image") => {
+                    serde_json::json!({"prompt":prompt,"image_size":"auto_2K","num_images":1,"output_format":"png","enable_safety_checker":true})
+                }
+                ("fal", "bytedance/seedream/v5/lite/edit", "image-to-image") => {
+                    let input = image()?;
+                    serde_json::json!({"prompt":prompt,"image_size":"auto_2K","num_images":1,"output_format":"png","enable_safety_checker":true,"image_urls":[data_uri(input)]})
+                }
+                _ => return Err(Error::Protocol("provider_model_not_approved")),
+            });
+        }
+
         let duration = object
             .get("duration")
             .and_then(Value::as_u64)
@@ -316,20 +451,10 @@ impl DirectProvider {
             .get("aspectRatio")
             .and_then(Value::as_str)
             .filter(|v| matches!(*v, "16:9" | "9:16"));
-        let image = || -> Result<&AssignmentInput> {
-            a.inputs
-                .first()
-                .ok_or(Error::Protocol("assignment_image_required"))
-        };
-        if a.modality == "image-to-video" {
-            if let Some(image_id) = object.get("imageId") {
-                if image_id.as_str() != a.inputs.first().map(|input| input.id.as_str()) {
-                    return Err(Error::Protocol("assignment_image_id_mismatch"));
-                }
-            }
-        }
-        let data_uri =
-            |input: &AssignmentInput| format!("data:{};base64,{}", input.mime, input.bytes_base64);
+        let wide_aspect = object
+            .get("aspectRatio")
+            .and_then(Value::as_str)
+            .filter(|v| matches!(*v, "16:9" | "9:16" | "1:1" | "auto"));
         Ok(match a.provider.as_str() {
             // ModelArk's video endpoint names the aspect field `ratio`; this is a
             // deliberately text-only v1 contract (no caller URLs or arbitrary JSON).
@@ -369,42 +494,112 @@ impl DirectProvider {
                 }
                 serde_json::json!({"instances":[instance],"parameters":{"aspectRatio":aspect,"durationSeconds":duration,"storageUri":format!("gs://{}/attelier-api-miner/",self.google_output_bucket.as_deref().ok_or(Error::Protocol("google_cloud_project_location_or_bucket"))?),"sampleCount":1}})
             }
+            "atlascloud" if a.model == "kwaivgi/kling-v4.0/text-to-video" && a.modality == "text-to-video" => {
+                if !(3..=15).contains(&duration) {
+                    return Err(Error::Protocol("provider_duration_invalid"));
+                }
+                serde_json::json!({"model":a.model,"prompt":prompt,"resolution":"1080p","duration":duration,"dynamic_range":"sdr","aspect_ratio":wide_aspect.filter(|v| *v != "auto").unwrap_or("16:9")})
+            }
+            "atlascloud" if a.model == "kwaivgi/kling-v4.0/image-to-video" && a.modality == "image-to-video" => {
+                if !(3..=15).contains(&duration) {
+                    return Err(Error::Protocol("provider_duration_invalid"));
+                }
+                let input = image()?;
+                serde_json::json!({"model":a.model,"prompt":prompt,"resolution":"1080p","duration":duration,"dynamic_range":"sdr","image":data_uri(input)})
+            }
+            "atlascloud" if a.model == "minimax/h3-developer/text-to-video" && a.modality == "text-to-video" => {
+                if !(5..=15).contains(&duration) {
+                    return Err(Error::Protocol("provider_duration_invalid"));
+                }
+                serde_json::json!({"model":a.model,"prompt":prompt,"duration":duration,"resolution":"768P","ratio":wide_aspect.filter(|v| *v != "auto").unwrap_or("16:9"),"prompt_expansion":false})
+            }
+            "atlascloud" => return Err(Error::Protocol("provider_model_not_approved")),
             // Each fal route owns its own body schema. In particular, the
             // Seedance Queue OpenAPI uses string durations; do not infer a
             // payload shape from a model family or an older provider API.
             "fal" if a.model.starts_with("fal-ai/veo3.1") && a.modality == "image-to-video" => {
+                if !a.model.ends_with("image-to-video") {
+                    return Err(Error::Protocol("provider_model_not_approved"));
+                }
                 if !matches!(duration, 4 | 6 | 8) {
                     return Err(Error::Protocol("provider_duration_invalid"));
                 }
                 let input = image()?;
                 serde_json::json!({"prompt":prompt,"image_url":data_uri(input),"duration":format!("{duration}s"),"aspect_ratio":aspect,"resolution":"720p"})
             }
-            "fal" if a.model.starts_with("fal-ai/veo3.1") => {
+            "fal" if a.model.starts_with("fal-ai/veo3.1") && a.modality == "text-to-video" => {
+                if a.model.ends_with("image-to-video") {
+                    return Err(Error::Protocol("provider_model_not_approved"));
+                }
                 if !matches!(duration, 4 | 6 | 8) {
                     return Err(Error::Protocol("provider_duration_invalid"));
                 }
                 serde_json::json!({"prompt":prompt,"duration":format!("{duration}s"),"aspect_ratio":aspect,"resolution":"720p"})
             }
-            "fal" if a.model.starts_with("fal-ai/kling-video/") => {
+            "fal" if a.model.starts_with("fal-ai/kling-video/") && a.modality == "text-to-video" => {
                 if !(3..=15).contains(&duration) {
                     return Err(Error::Protocol("provider_duration_invalid"));
                 }
                 serde_json::json!({"prompt":prompt,"duration":duration.to_string(),"aspect_ratio":aspect})
             }
-            "fal" if a.model == "bytedance/seedance-2.0/fast/image-to-video" => {
+            "fal"
+                if matches!(
+                    a.model.as_str(),
+                    "bytedance/seedance-2.0/image-to-video"
+                        | "bytedance/seedance-2.0/fast/image-to-video"
+                ) && a.modality == "image-to-video" =>
+            {
                 if !(4..=15).contains(&duration) {
                     return Err(Error::Protocol("provider_duration_invalid"));
                 }
                 let input = image()?;
                 serde_json::json!({"prompt":prompt,"image_url":data_uri(input),"duration":duration.to_string(),"aspect_ratio":aspect,"resolution":"720p"})
             }
-            "fal" if a.model == "bytedance/seedance-2.5/text-to-video" => {
-                // The provider supports up to 30 seconds. The worker keeps
+            "fal"
+                if matches!(
+                    a.model.as_str(),
+                    "bytedance/seedance-2.5/text-to-video"
+                        | "bytedance/seedance-2.0/text-to-video"
+                        | "bytedance/seedance-2.0/fast/text-to-video"
+                ) && a.modality == "text-to-video" =>
+            {
+                // The provider supports up to 30 seconds on 2.5. The worker keeps
                 // the existing 15-second assignment cap to bound spend.
                 if !(4..=15).contains(&duration) {
                     return Err(Error::Protocol("provider_duration_invalid"));
                 }
                 serde_json::json!({"prompt":prompt,"duration":duration.to_string(),"aspect_ratio":aspect,"resolution":"720p"})
+            }
+            "fal" if a.model == "minimax/h3-max/text-to-video" && a.modality == "text-to-video" => {
+                if !matches!(duration, 5 | 10) {
+                    return Err(Error::Protocol("provider_duration_invalid"));
+                }
+                serde_json::json!({"prompt":prompt,"duration":duration.to_string(),"aspect_ratio":wide_aspect.filter(|v| *v != "auto").unwrap_or("16:9"),"resolution":"768P","prompt_expansion_mode":"balanced"})
+            }
+            "fal" if a.model == "alibaba/wan-3.0/text-to-video" && a.modality == "text-to-video" => {
+                if !matches!(duration, 5 | 10) {
+                    return Err(Error::Protocol("provider_duration_invalid"));
+                }
+                serde_json::json!({"prompt":prompt,"duration":duration.to_string(),"aspect_ratio":wide_aspect.filter(|v| *v != "auto").unwrap_or("16:9"),"resolution":"720p"})
+            }
+            "fal"
+                if a.model == "blackforestlabs/flux-3-max/text-to-video"
+                    && a.modality == "text-to-video" =>
+            {
+                if !(5..=15).contains(&duration) {
+                    return Err(Error::Protocol("provider_duration_invalid"));
+                }
+                serde_json::json!({"prompt":prompt,"duration":duration,"aspect_ratio":wide_aspect.unwrap_or("16:9"),"resolution":"720p","generate_audio":true,"reasoning_level":"high"})
+            }
+            "fal"
+                if a.model == "blackforestlabs/flux-3-max/image-to-video"
+                    && a.modality == "image-to-video" =>
+            {
+                if !(5..=15).contains(&duration) {
+                    return Err(Error::Protocol("provider_duration_invalid"));
+                }
+                let input = image()?;
+                serde_json::json!({"prompt":prompt,"image_url":data_uri(input),"duration":duration,"aspect_ratio":wide_aspect.unwrap_or("auto"),"resolution":"720p","generate_audio":true,"reasoning_level":"high"})
             }
             "fal" => return Err(Error::Protocol("provider_model_not_approved")),
             _ => return Err(Error::Protocol("unsupported_provider")),
@@ -414,7 +609,10 @@ impl DirectProvider {
         let candidates = [
             "/content/video_url",
             "/video/url",
+            "/images/0/url",
+            "/image/url",
             "/data/task_result/videos/0/url",
+            "/data/outputs/0",
             "/response/generatedVideos/0/video/uri",
             "/response/videos/0/gcsUri",
             "/output/url",
@@ -448,6 +646,9 @@ impl DirectProvider {
             "kling" => child_or_root("klingai.com") || child_or_root("kuaishou.com"),
             "google-cloud" => {
                 child_or_root("googleusercontent.com") || child_or_root("googleapis.com")
+            }
+            "atlascloud" => {
+                child_or_root("atlascloud.ai") || host == "atlas-media.oss-us-west-1.aliyuncs.com"
             }
             // fal's own schemas show result files at both fal.media and its
             // dedicated Google storage bucket. Do not permit arbitrary GCS
@@ -578,12 +779,13 @@ impl Provider for DirectProvider {
             } else {
                 value
                     .pointer("/status")
+                    .or_else(|| value.pointer("/data/status"))
                     .or_else(|| value.pointer("/data/task_status"))
                     .and_then(Value::as_str)
                     .unwrap_or("running")
             };
             let normalized_status = status.to_ascii_lowercase();
-            if normalized_status == "cancelled" {
+            if matches!(normalized_status.as_str(), "cancelled" | "canceled") {
                 return Err(Error::ProviderTerminal {
                     reason: "provider_cancelled",
                     http_status: None,

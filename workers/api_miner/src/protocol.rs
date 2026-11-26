@@ -72,18 +72,24 @@ impl Assignment {
             || self.grant_nonce.is_empty()
             || self.request_hash.len() != 64
             || self.expires_at <= now_ms()
-            || !["text-to-video", "image-to-video"].contains(&self.modality.as_str())
-            || !["byteplus", "kling", "google-cloud", "fal"].contains(&self.provider.as_str())
+            || !["text-to-video", "image-to-video", "text-to-image", "image-to-image"]
+                .contains(&self.modality.as_str())
+            || !["byteplus", "kling", "google-cloud", "fal", "atlascloud"]
+                .contains(&self.provider.as_str())
         {
             return Err(Error::Protocol("invalid_assignment"));
         }
         if sha256(&canonical(&self.request)?) != self.request_hash {
             return Err(Error::Protocol("request_hash_mismatch"));
         }
-        if self.modality == "text-to-video" && !self.inputs.is_empty() {
+        if matches!(self.modality.as_str(), "text-to-video" | "text-to-image")
+            && !self.inputs.is_empty()
+        {
             return Err(Error::Protocol("unexpected_assignment_input"));
         }
-        if self.modality == "image-to-video" && self.inputs.len() != 1 {
+        if matches!(self.modality.as_str(), "image-to-video" | "image-to-image")
+            && self.inputs.len() != 1
+        {
             return Err(Error::Protocol("assignment_image_required"));
         }
         for input in &self.inputs {

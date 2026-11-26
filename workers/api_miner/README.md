@@ -28,7 +28,7 @@ model execution, invoice, service availability, or commercial permission.
    socket; `doctor` can check configuration but cannot manufacture TDX access.
 3. Encrypt only keys that the miner is authorized to use in the Phala deployment:
    `BYTEPLUS_API_KEY`, `KLING_ACCESS_KEY` plus `KLING_SECRET_KEY`,
-   `GOOGLE_CLOUD_ACCESS_TOKEN`, or `FAL_KEY`. Kling V2.6 uses its legacy
+   `GOOGLE_CLOUD_ACCESS_TOKEN`, `FAL_KEY`, or `ATLASCLOUD_API_KEY`. Kling V2.6 uses its legacy
    AccessKey/SecretKey flow: the worker creates a short-lived HS256 JWT inside
    the CVM (cached only until shortly before its 30-minute expiry); do not
    replace that pair with a browser/API token.
@@ -92,6 +92,24 @@ unclean host loss, `flock` is released by the OS even though the lock file may
 remain. Inspect the durable state and ensure no worker process holds the lock;
 do not delete a harmless lock file merely because it exists. Never run a second
 worker against the same state directory.
+
+## Reviewed model catalog & staged rollout
+
+The single audited worker binary supports all 5 upstream provider families (`byteplus`, `fal`, `atlascloud`, `kling`, `google-cloud`) across both video (`text-to-video`, `image-to-video`) and image (`text-to-image`, `image-to-image`) modalities so enabling new model families later requires no CVM image rebuild or re-attestation:
+
+| Family | Providers | Reviewed Models | Modalities | Rollout |
+|---|---|---|---|---|
+| **Seedance** | `byteplus`, `fal` | Seedance 2.5, 2.0, 2.0 Fast, 2.0 Mini | `text-to-video`, `image-to-video` | **Wave 1 (Launch)** |
+| **Kling** | `atlascloud`, `fal`, `kling` | Kling 4.0 (Video & Image), Kling 3 Turbo, Kling 2.6 | `text-to-video`, `image-to-video`, `text-to-image`, `image-to-image` | Staged |
+| **Veo 3.1** | `google-cloud`, `fal` | Veo 3.1, Veo 3.1 Fast | `text-to-video`, `image-to-video` | Staged |
+| **MiniMax H3** | `fal`, `atlascloud` | MiniMax H3 Max, MiniMax H3 Developer | `text-to-video` | Staged |
+| **Wan 3.0** | `fal` | Wan 3.0 | `text-to-video` | Staged |
+| **FLUX 3 Max** | `fal` | FLUX 3 Max Video | `text-to-video`, `image-to-video` | Staged |
+| **Nano Banana** | `fal` | Nano Banana Pro & 2.1 (Create & Edit) | `text-to-image`, `image-to-image` | Staged |
+| **FLUX 2 Flash** | `fal` | FLUX 2 Flash (Create & Edit) | `text-to-image`, `image-to-image` | Staged |
+| **Seedream 5 Lite** | `fal` | Seedream 5 Lite (Create & Edit) | `text-to-image`, `image-to-image` | Staged |
+
+Production starts with **Seedance only** via the gateway's `enabledModels` allowlist in the API miner config (e.g. `["dreamina-seedance-2-5-260628", "bytedance/seedance-2.5/text-to-video"]`). Additional families are promoted incrementally by adding their upstream or canonical model IDs to `enabledModels`.
 
 ## Gateway protocol
 

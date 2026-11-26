@@ -28,6 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "KLING_SECRET_KEY",
                 "GOOGLE_CLOUD_ACCESS_TOKEN",
                 "FAL_KEY",
+                "ATLASCLOUD_API_KEY",
             ] {
                 let configured = env::var(name)
                     .map(|v| !v.trim().is_empty())
@@ -398,7 +399,10 @@ fn offers_from_config(raw: &str) -> Result<Vec<Offer>, Box<dyn std::error::Error
         });
         if offer.model.is_empty()
             || offer.model.len() > 160
-            || !matches!(offer.modality.as_str(), "text-to-video" | "image-to-video")
+            || !matches!(
+                offer.modality.as_str(),
+                "text-to-video" | "image-to-video" | "text-to-image" | "image-to-image"
+            )
             || (offer.quote_microusd.is_some() && !flat_ok)
             || (offer.quote_microusd_per_second.is_some() && !per_sec_ok)
             || (offer.quotes_by_duration.is_some() && !by_dur_ok)
@@ -420,11 +424,13 @@ mod tests {
         let parsed = offers_from_config(
             r#"[
               {"model":"dreamina-seedance-2-5-260628","modality":"text-to-video","quoteMicrousdPerSecond":20000,"quotesByDuration":{"5":95000,"10":180000}},
-              {"model":"dreamina-seedance-2-5-260628","modality":"image-to-video","quoteMicrousd":100000}
+              {"model":"dreamina-seedance-2-5-260628","modality":"image-to-video","quoteMicrousd":100000},
+              {"model":"fal-ai/nano-banana-pro","modality":"text-to-image","quoteMicrousd":90000},
+              {"model":"fal-ai/nano-banana-pro/edit","modality":"image-to-image","quoteMicrousd":95000}
             ]"#,
         )
         .unwrap();
-        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed.len(), 4);
         assert_eq!(parsed[0].quote_microusd_per_second, Some(20_000));
         assert_eq!(
             parsed[0]

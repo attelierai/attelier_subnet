@@ -1427,4 +1427,197 @@ mod tests {
         assert_eq!(final_state.accepted.len(), 2);
         assert!(final_state.accepted.values().all(|row| row.state == "completed"));
     }
+
+    #[test]
+    fn frontier_video_and_image_models_map_exact_fal_apps_and_payloads() {
+        let fal = DirectProvider::fixture("http://127.0.0.1:1/", "fal");
+        let app_cases = [
+            ("bytedance/seedance-2.0/text-to-video", "bytedance/seedance-2.0"),
+            ("bytedance/seedance-2.0/image-to-video", "bytedance/seedance-2.0"),
+            ("bytedance/seedance-2.0/fast/text-to-video", "bytedance/seedance-2.0"),
+            ("minimax/h3-max/text-to-video", "minimax/h3-max"),
+            ("alibaba/wan-3.0/text-to-video", "alibaba/wan-3.0"),
+            ("blackforestlabs/flux-3-max/text-to-video", "blackforestlabs/flux-3-max"),
+            ("blackforestlabs/flux-3-max/image-to-video", "blackforestlabs/flux-3-max"),
+            ("fal-ai/nano-banana-pro", "fal-ai/nano-banana-pro"),
+            ("fal-ai/nano-banana-pro/edit", "fal-ai/nano-banana-pro"),
+            ("google/nano-banana-2.1", "google/nano-banana-2.1"),
+            ("google/nano-banana-2.1/edit", "google/nano-banana-2.1"),
+            ("fal-ai/flux-2/flash", "fal-ai/flux-2"),
+            ("fal-ai/flux-2/flash/edit", "fal-ai/flux-2"),
+            ("bytedance/seedream/v5/lite/text-to-image", "bytedance/seedream"),
+            ("bytedance/seedream/v5/lite/edit", "bytedance/seedream"),
+        ];
+        for (model, expected_app) in app_cases {
+            assert_eq!(DirectProvider::fal_app(model).unwrap(), expected_app);
+            assert!(DirectProvider::approved_model("fal", model));
+        }
+
+        // Video frontier payloads
+        let mut h3 = assignment();
+        h3.provider = "fal".into();
+        h3.model = "minimax/h3-max/text-to-video".into();
+        let h3_body = fal.payload(&h3).unwrap();
+        assert_eq!(h3_body["resolution"], "768P");
+        assert_eq!(h3_body["prompt_expansion_mode"], "balanced");
+        assert_eq!(h3_body["duration"], "5");
+
+        let mut wan = assignment();
+        wan.provider = "fal".into();
+        wan.model = "alibaba/wan-3.0/text-to-video".into();
+        let wan_body = fal.payload(&wan).unwrap();
+        assert_eq!(wan_body["resolution"], "720p");
+        assert_eq!(wan_body["duration"], "5");
+
+        let mut flux_vid = assignment();
+        flux_vid.provider = "fal".into();
+        flux_vid.model = "blackforestlabs/flux-3-max/text-to-video".into();
+        let flux_vid_body = fal.payload(&flux_vid).unwrap();
+        assert_eq!(flux_vid_body["duration"], 5);
+        assert_eq!(flux_vid_body["generate_audio"], true);
+
+        // Image frontier payloads (text-to-image + image-to-image)
+        let mut banana = assignment();
+        banana.provider = "fal".into();
+        banana.model = "google/nano-banana-2.1".into();
+        banana.modality = "text-to-image".into();
+        banana.request = serde_json::json!({"prompt":"neon atelier","aspectRatio":"16:9","resolution":"2K"});
+        banana.request_hash = sha256(&canonical(&banana.request).unwrap());
+        banana.validate("worker", "miner").unwrap();
+        let banana_body = fal.payload(&banana).unwrap();
+        assert_eq!(banana_body["resolution"], "2K");
+        assert_eq!(banana_body["thinking_level"], "medium");
+        assert_eq!(banana_body["num_images"], 1);
+
+        let mut banana_edit = banana.clone();
+        banana_edit.model = "google/nano-banana-2.1/edit".into();
+        banana_edit.modality = "image-to-image".into();
+        banana_edit.inputs = vec![AssignmentInput {
+            id: "img-1".into(),
+            mime: "image/png".into(),
+            sha256: sha256(b"png"),
+            bytes_base64: B64.encode(b"png"),
+        }];
+        banana_edit.request = serde_json::json!({"prompt":"add rain","resolution":"1K","imageId":"img-1"});
+        banana_edit.request_hash = sha256(&canonical(&banana_edit.request).unwrap());
+        banana_edit.validate("worker", "miner").unwrap();
+        let edit_body = fal.payload(&banana_edit).unwrap();
+        assert_eq!(edit_body["image_urls"][0], "data:image/png;base64,cG5n");
+
+        // Reject video duration field on image assignments
+        let mut bad_img = banana.clone();
+        bad_img.request = serde_json::json!({"prompt":"bad","duration":5});
+        bad_img.request_hash = sha256(&canonical(&bad_img.request).unwrap());
+        assert!(matches!(
+            fal.payload(&bad_img),
+            Err(Error::Protocol("provider_request_unsupported"))
+        ));
+
+        // Fal image output URL extraction
+        assert_eq!(
+            fal.output_url(
+                "fal",
+                &serde_json::json!({"images":[{"url":"https://v3.fal.media/files/out.png"}]})
+            )
+            .as_deref(),
+            Some("https://v3.fal.media/files/out.png")
+        );
+    }
+
+    #[test]
+    fn atlascloud_provider_supports_kling4_and_minimax_h3_submit_poll_and_hosts() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let origin = format!("http://{address}/");
+        let server = thread::spawn(move || {
+            for _ in 0..6 {
+                let (mut s, _) = listener.accept().unwrap();
+                let mut raw = vec![0; 8192];
+                let n = s.read(&mut raw).unwrap();
+                let req = String::from_utf8_lossy(&raw[..n]);
+                if req.contains("/atlascloud/submit") {
+                    let body = r#"{"code":200,"data":{"id":"atlas-pred-1"}}"#;
+                    write!(
+                        s,
+                        "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    )
+                    .unwrap();
+                } else if req.contains("/atlascloud/status/atlas-pred-1") {
+                    let body = format!(
+                        r#"{{"code":200,"data":{{"id":"atlas-pred-1","status":"completed","outputs":["http://{address}/output/atlas"]}}}}"#
+                    );
+                    write!(
+                        s,
+                        "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    )
+                    .unwrap();
+                } else if req.contains("/output/atlas") {
+                    let bytes = b"atlas-media";
+                    write!(
+                        s,
+                        "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                        bytes.len()
+                    )
+                    .unwrap();
+                    s.write_all(bytes).unwrap();
+                } else {
+                    panic!("unexpected atlas request: {req}");
+                }
+            }
+        });
+
+        let atlas = DirectProvider::fixture(&origin, "atlascloud");
+        // Kling 4.0 T2V
+        let mut kling = assignment();
+        kling.provider = "atlascloud".into();
+        kling.model = "kwaivgi/kling-v4.0/text-to-video".into();
+        let kling_body = atlas.payload(&kling).unwrap();
+        assert_eq!(kling_body["resolution"], "1080p");
+        assert_eq!(kling_body["duration"], 5);
+        assert_eq!(kling_body["dynamic_range"], "sdr");
+        let sub = atlas.submit(&kling).unwrap();
+        assert_eq!(sub.reference, "atlas-pred-1");
+        assert_eq!(atlas.collect(&kling, &sub).unwrap(), b"atlas-media");
+
+        // Kling Image 4.0 T2I
+        let mut kling_img = assignment();
+        kling_img.provider = "atlascloud".into();
+        kling_img.model = "kwaivgi/kling-image-v4.0/text-to-image".into();
+        kling_img.modality = "text-to-image".into();
+        kling_img.request = serde_json::json!({"prompt":"studio bottle","aspectRatio":"1:1","resolution":"2k"});
+        kling_img.request_hash = sha256(&canonical(&kling_img.request).unwrap());
+        let img_body = atlas.payload(&kling_img).unwrap();
+        assert_eq!(img_body["resolution"], "2k");
+        assert_eq!(img_body["num_images"], 1);
+        let img_sub = atlas.submit(&kling_img).unwrap();
+        assert_eq!(atlas.collect(&kling_img, &img_sub).unwrap(), b"atlas-media");
+
+        // MiniMax H3 Developer payload check
+        let mut h3 = assignment();
+        h3.provider = "atlascloud".into();
+        h3.model = "minimax/h3-developer/text-to-video".into();
+        let h3_body = atlas.payload(&h3).unwrap();
+        assert_eq!(h3_body["resolution"], "768P");
+        assert_eq!(h3_body["prompt_expansion"], false);
+
+        // Host allowlist check
+        assert!(atlas
+            .output_url(
+                "atlascloud",
+                &serde_json::json!({"data":{"outputs":["https://atlas-media.oss-us-west-1.aliyuncs.com/out.mp4"]}})
+            )
+            .is_some());
+        assert!(atlas
+            .output_url(
+                "atlascloud",
+                &serde_json::json!({"data":{"outputs":["https://evil.example/out.mp4"]}})
+            )
+            .is_none());
+
+        server.join().unwrap();
+    }
 }
