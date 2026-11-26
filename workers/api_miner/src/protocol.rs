@@ -74,8 +74,16 @@ impl Assignment {
             || self.expires_at <= now_ms()
             || !["text-to-video", "image-to-video", "text-to-image", "image-to-image"]
                 .contains(&self.modality.as_str())
-            || !["byteplus", "kling", "google-cloud", "fal", "atlascloud"]
-                .contains(&self.provider.as_str())
+            || ![
+                "byteplus",
+                "kling",
+                "google-cloud",
+                "fal",
+                "atlascloud",
+                "kie",
+                "higgsfield",
+            ]
+            .contains(&self.provider.as_str())
         {
             return Err(Error::Protocol("invalid_assignment"));
         }

@@ -6,7 +6,11 @@ use base64::{
 use hmac::{Hmac, Mac};
 use serde_json::Value;
 use sha2::Sha256;
-use std::{io::Read, sync::Mutex};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    io::Read,
+    sync::Mutex,
+};
 
 pub struct ProviderSubmission {
     pub reference: String,
@@ -17,12 +21,24 @@ pub trait Provider {
     fn collect(&self, assignment: &Assignment, submission: &ProviderSubmission) -> Result<Vec<u8>>;
 }
 
-/// Direct adapters expose no caller-controlled base URL.  Contracts must map a
+pub const SUPPORTED_PROVIDERS: &[&str] = &[
+    "byteplus",
+    "fal",
+    "atlascloud",
+    "kie",
+    "higgsfield",
+    "kling",
+    "google-cloud",
+];
+
+/// Direct adapters expose no caller-controlled base URL. Contracts must map a
 /// model to one approved provider endpoint before a job can be assigned.
+/// One worker can serve multiple sealed providers concurrently; any provider
+/// not enabled in `enabled_providers` fails closed before touching the network.
 pub struct DirectProvider {
-    configured_provider: String,
+    enabled_providers: BTreeSet<String>,
     client: reqwest::blocking::Client,
-    key: zeroize::Zeroizing<String>,
+    keys: BTreeMap<String, zeroize::Zeroizing<String>>,
     kling_access_key: Option<zeroize::Zeroizing<String>>,
     kling_secret_key: Option<zeroize::Zeroizing<String>>,
     // The signed token is sensitive too. Keep it only inside the process and
@@ -99,95 +115,182 @@ impl DirectProvider {
                     | "kwaivgi/kling-image-v4.0/text-to-image"
                     | "minimax/h3-developer/text-to-video"
             ),
+            "kie" => matches!(
+                model,
+                "nano-banana-pro" | "nano-banana-2-1" | "kling-3.0/video"
+            ),
+            "higgsfield" => matches!(
+                model,
+                "bytedance/seedance-2.5/text-to-video"
+                    | "bytedance/seedance-2.0/image-to-video"
+                    | "kling-video/v3.0/std/text-to-video"
+                    | "kling-video/v3.0/std/image-to-video"
+                    | "kling-video/v2.5-turbo/standard/image-to-video"
+                    | "minimax/hailuo-2.3/standard/image-to-video"
+                    | "alibaba/wan-3.0/text-to-video"
+                    | "ideogram/v4.0"
+                    | "recraft/v4.1/text-to-image"
+            ),
             // Every fal route is pinned explicitly in fal_app; adding a model
             // is a reviewed release change, never a caller-selected endpoint.
             "fal" => Self::fal_app(model).is_ok(),
             _ => false,
         }
     }
+    fn key_env_var(provider: &str) -> Option<&'static str> {
+        match provider {
+            "byteplus" => Some("BYTEPLUS_API_KEY"),
+            "google-cloud" => Some("GOOGLE_CLOUD_ACCESS_TOKEN"),
+            "fal" => Some("FAL_KEY"),
+            "atlascloud" => Some("ATLASCLOUD_API_KEY"),
+            "kie" => Some("KIE_API_KEY"),
+            "higgsfield" => Some("HIGGSFIELD_API_KEY"),
+            _ => None,
+        }
+    }
+    pub fn enabled_providers(&self) -> Vec<String> {
+        self.enabled_providers.iter().cloned().collect()
+    }
     pub fn from_env(provider: &str) -> Result<Self> {
-        let variable = match provider {
-            "byteplus" => "BYTEPLUS_API_KEY",
-            "kling" => "",
-            "google-cloud" => "GOOGLE_CLOUD_ACCESS_TOKEN",
-            "fal" => "FAL_KEY",
-            "atlascloud" => "ATLASCLOUD_API_KEY",
-            _ => return Err(Error::Protocol("unsupported_provider")),
-        };
-        let key = if provider == "kling" {
-            String::new()
-        } else {
-            std::env::var(variable).map_err(|_| Error::Protocol("provider_key_unavailable"))?
-        };
-        if provider != "kling" && key.trim().is_empty() {
+        Self::from_env_providers(&[provider.to_owned()])
+    }
+    pub fn from_env_auto() -> Result<Self> {
+        let mut detected = Vec::new();
+        for &provider in SUPPORTED_PROVIDERS {
+            let available = if provider == "kling" {
+                std::env::var("KLING_ACCESS_KEY")
+                    .map(|v| !v.trim().is_empty())
+                    .unwrap_or(false)
+                    && std::env::var("KLING_SECRET_KEY")
+                        .map(|v| !v.trim().is_empty())
+                        .unwrap_or(false)
+            } else if let Some(var) = Self::key_env_var(provider) {
+                let has_key = std::env::var(var)
+                    .map(|v| !v.trim().is_empty())
+                    .unwrap_or(false);
+                if provider == "google-cloud" {
+                    has_key
+                        && std::env::var("GOOGLE_CLOUD_PROJECT")
+                            .map(|v| !v.trim().is_empty())
+                            .unwrap_or(false)
+                        && std::env::var("GOOGLE_CLOUD_LOCATION")
+                            .map(|v| !v.trim().is_empty())
+                            .unwrap_or(false)
+                        && std::env::var("GOOGLE_CLOUD_OUTPUT_BUCKET")
+                            .map(|v| !v.trim().is_empty())
+                            .unwrap_or(false)
+                } else {
+                    has_key
+                }
+            } else {
+                false
+            };
+            if available {
+                detected.push(provider.to_owned());
+            }
+        }
+        if detected.is_empty() {
             return Err(Error::Protocol("provider_key_unavailable"));
         }
-        let kling_access_key = if provider == "kling" {
-            Some(zeroize::Zeroizing::new(
-                std::env::var("KLING_ACCESS_KEY")
-                    .map_err(|_| Error::Protocol("kling_access_key_unavailable"))?,
-            ))
-        } else {
-            None
-        };
-        let kling_secret_key = if provider == "kling" {
-            Some(zeroize::Zeroizing::new(
-                std::env::var("KLING_SECRET_KEY")
-                    .map_err(|_| Error::Protocol("kling_secret_key_unavailable"))?,
-            ))
-        } else {
-            None
-        };
-        if kling_access_key
-            .as_deref()
-            .is_some_and(|key| key.trim().is_empty())
-            || kling_secret_key
-                .as_deref()
-                .is_some_and(|key| key.trim().is_empty())
-        {
-            return Err(Error::Protocol("kling_credentials_unavailable"));
+        Self::from_env_providers(&detected)
+    }
+    pub fn from_env_providers(providers: &[String]) -> Result<Self> {
+        if providers.is_empty() {
+            return Err(Error::Protocol("unsupported_provider"));
         }
-        let project = std::env::var("GOOGLE_CLOUD_PROJECT").ok();
-        let location = std::env::var("GOOGLE_CLOUD_LOCATION").ok();
-        let bucket = std::env::var("GOOGLE_CLOUD_OUTPUT_BUCKET").ok();
+        let mut enabled_providers = BTreeSet::new();
+        let mut keys = BTreeMap::new();
+        let mut kling_access_key = None;
+        let mut kling_secret_key = None;
+        let mut google_project = None;
+        let mut google_location = None;
+        let mut google_output_bucket = None;
         let safe = |v: &str| {
             v.chars()
                 .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.')
                 && v.len() >= 3
         };
-        if provider == "google-cloud"
-            && (!project.as_deref().is_some_and(safe)
-                || !location.as_deref().is_some_and(safe)
-                || !bucket.as_deref().is_some_and(safe))
-        {
-            return Err(Error::Protocol("google_cloud_project_location_or_bucket"));
+        for raw in providers {
+            let provider = raw.trim();
+            if !SUPPORTED_PROVIDERS.contains(&provider) {
+                return Err(Error::Protocol("unsupported_provider"));
+            }
+            if !enabled_providers.insert(provider.to_owned()) {
+                continue;
+            }
+            if provider == "kling" {
+                let access = std::env::var("KLING_ACCESS_KEY")
+                    .map_err(|_| Error::Protocol("kling_access_key_unavailable"))?;
+                let secret = std::env::var("KLING_SECRET_KEY")
+                    .map_err(|_| Error::Protocol("kling_secret_key_unavailable"))?;
+                if access.trim().is_empty() || secret.trim().is_empty() {
+                    return Err(Error::Protocol("kling_credentials_unavailable"));
+                }
+                kling_access_key = Some(zeroize::Zeroizing::new(access));
+                kling_secret_key = Some(zeroize::Zeroizing::new(secret));
+            } else {
+                let variable = Self::key_env_var(provider)
+                    .ok_or(Error::Protocol("unsupported_provider"))?;
+                let key = std::env::var(variable)
+                    .map_err(|_| Error::Protocol("provider_key_unavailable"))?;
+                if key.trim().is_empty() {
+                    return Err(Error::Protocol("provider_key_unavailable"));
+                }
+                keys.insert(provider.to_owned(), zeroize::Zeroizing::new(key));
+            }
+            if provider == "google-cloud" {
+                let project = std::env::var("GOOGLE_CLOUD_PROJECT").ok();
+                let location = std::env::var("GOOGLE_CLOUD_LOCATION").ok();
+                let bucket = std::env::var("GOOGLE_CLOUD_OUTPUT_BUCKET").ok();
+                if !project.as_deref().is_some_and(safe)
+                    || !location.as_deref().is_some_and(safe)
+                    || !bucket.as_deref().is_some_and(safe)
+                {
+                    return Err(Error::Protocol("google_cloud_project_location_or_bucket"));
+                }
+                google_project = project;
+                google_location = location;
+                google_output_bucket = bucket;
+            }
         }
         Ok(Self {
-            configured_provider: provider.into(),
+            enabled_providers,
             client: reqwest::blocking::Client::builder()
                 .timeout(std::time::Duration::from_secs(45))
                 .redirect(reqwest::redirect::Policy::none())
                 .build()?,
-            key: zeroize::Zeroizing::new(key),
+            keys,
             kling_access_key,
             kling_secret_key,
             kling_token: Mutex::new(None),
-            google_project: project,
-            google_location: location,
-            google_output_bucket: bucket,
+            google_project,
+            google_location,
+            google_output_bucket,
             #[cfg(test)]
             test_origin: None,
         })
     }
     #[cfg(test)]
     pub(crate) fn fixture(origin: &str, configured_provider: &str) -> Self {
+        Self::fixture_multi(origin, &[configured_provider])
+    }
+    #[cfg(test)]
+    pub(crate) fn fixture_multi(origin: &str, providers: &[&str]) -> Self {
+        let mut enabled_providers = BTreeSet::new();
+        let mut keys = BTreeMap::new();
+        for &p in providers {
+            enabled_providers.insert(p.to_owned());
+            if p != "kling" {
+                keys.insert(p.to_owned(), zeroize::Zeroizing::new("fixture-key".into()));
+            }
+        }
         Self {
-            configured_provider: configured_provider.into(),
+            enabled_providers,
             client: reqwest::blocking::Client::builder()
                 .redirect(reqwest::redirect::Policy::none())
                 .build()
                 .unwrap(),
-            key: zeroize::Zeroizing::new("fixture-key".into()),
+            keys,
             kling_access_key: Some(zeroize::Zeroizing::new("fixture-access".into())),
             kling_secret_key: Some(zeroize::Zeroizing::new("fixture-secret".into())),
             kling_token: Mutex::new(None),
@@ -198,14 +301,22 @@ impl DirectProvider {
         }
     }
     fn authorization(&self, provider: &str) -> Result<String> {
-        if provider != self.configured_provider {
+        if !self.enabled_providers.contains(provider) {
             return Err(Error::Protocol("configured_provider_mismatch"));
         }
-        if provider == "fal" {
-            return Ok(format!("Key {}", self.key.as_str()));
+        if matches!(provider, "fal" | "higgsfield") {
+            let key = self
+                .keys
+                .get(provider)
+                .ok_or(Error::Protocol("provider_key_unavailable"))?;
+            return Ok(format!("Key {}", key.as_str()));
         }
         if provider != "kling" {
-            return Ok(format!("Bearer {}", self.key.as_str()));
+            let key = self
+                .keys
+                .get(provider)
+                .ok_or(Error::Protocol("provider_key_unavailable"))?;
+            return Ok(format!("Bearer {}", key.as_str()));
         }
         // Kling v2.6 uses the legacy API design: generate a short-lived HS256
         // JWT from the sealed AccessKey/SecretKey on every upstream call.
@@ -260,6 +371,8 @@ impl DirectProvider {
    "kling"=>if modality=="image-to-video"{"https://api-singapore.klingai.com/v1/videos/image2video"}else{"https://api-singapore.klingai.com/v1/videos/text2video"},
    "google-cloud"=>return reqwest::Url::parse(&format!("https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/{}:predictLongRunning",self.google_location.as_deref().ok_or(Error::Protocol("google_cloud_project_or_location"))?,self.google_project.as_deref().ok_or(Error::Protocol("google_cloud_project_or_location"))?,self.google_location.as_deref().ok_or(Error::Protocol("google_cloud_project_or_location"))?,model)).map_err(|_|Error::Protocol("provider_endpoint")),
    "atlascloud"=>if matches!(modality,"text-to-image"|"image-to-image"){"https://api.atlascloud.ai/api/v1/model/generateImage"}else{"https://api.atlascloud.ai/api/v1/model/generateVideo"},
+   "kie"=>"https://api.kie.ai/api/v1/jobs/createTask",
+   "higgsfield"=>return reqwest::Url::parse(&format!("https://api.higgsfield.ai/{model}")).map_err(|_|Error::Protocol("provider_endpoint")),
    "fal"=>{
        if model.contains("..") || !model.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b==b'/' || b==b'.' || b==b'_' || b==b'-') { return Err(Error::Protocol("provider_model_invalid")); }
        return reqwest::Url::parse(&format!("https://queue.fal.run/{model}")).map_err(|_|Error::Protocol("provider_endpoint"));
@@ -269,7 +382,7 @@ impl DirectProvider {
         reqwest::Url::parse(endpoint).map_err(|_| Error::Protocol("provider_endpoint"))
     }
     fn reference(value: &Value) -> Option<String> {
-        ["/id", "/task_id", "/data/id", "/data/task_id", "/name", "/request_id"]
+        ["/id", "/task_id", "/data/id", "/data/taskId", "/data/task_id", "/name", "/request_id"]
             .iter()
             .find_map(|path| {
                 value
@@ -302,12 +415,18 @@ impl DirectProvider {
      // rather than treating an operation name as a generic REST resource.
      "google-cloud"=>format!("https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/{}:fetchPredictOperation",self.google_location.as_deref().ok_or(Error::Protocol("google_cloud_project_or_location"))?,self.google_project.as_deref().ok_or(Error::Protocol("google_cloud_project_or_location"))?,self.google_location.as_deref().ok_or(Error::Protocol("google_cloud_project_or_location"))?,a.model),
      "atlascloud"=>format!("https://api.atlascloud.ai/api/v1/model/prediction/{encoded}"),
+     "kie"=>format!("https://api.kie.ai/api/v1/jobs/recordInfo?taskId={encoded}"),
+     "higgsfield"=>format!("https://api.higgsfield.ai/requests/{encoded}/status"),
      "fal"=>return Self::fal_status_url(&a.model,&encoded),
      _=>return Err(Error::Protocol("unsupported_provider")),
    };
         reqwest::Url::parse(&endpoint).map_err(|_| Error::Protocol("provider_reference_invalid"))
     }
+    #[cfg(test)]
     pub(crate) fn payload(&self, a: &Assignment) -> Result<Value> {
+        self.payload_with_image_url(a, None)
+    }
+    fn payload_with_image_url(&self, a: &Assignment, uploaded_image_url: Option<&str>) -> Result<Value> {
         let object = a
             .request
             .as_object()
@@ -438,6 +557,30 @@ impl DirectProvider {
                     let input = image()?;
                     serde_json::json!({"prompt":prompt,"image_size":"auto_2K","num_images":1,"output_format":"png","enable_safety_checker":true,"image_urls":[data_uri(input)]})
                 }
+                ("kie", "nano-banana-pro" | "nano-banana-2-1", "text-to-image") => {
+                    let resolution = match img_res.unwrap_or("1K") {
+                        "1K" | "2K" | "4K" => img_res.unwrap_or("1K"),
+                        _ => return Err(Error::Protocol("provider_request_unsupported")),
+                    };
+                    serde_json::json!({"model":a.model,"input":{"prompt":prompt,"image_input":[],"aspect_ratio":img_aspect.unwrap_or("auto"),"resolution":resolution,"output_format":"png"}})
+                }
+                ("kie", "nano-banana-pro" | "nano-banana-2-1", "image-to-image") => {
+                    let resolution = match img_res.unwrap_or("1K") {
+                        "1K" | "2K" | "4K" => img_res.unwrap_or("1K"),
+                        _ => return Err(Error::Protocol("provider_request_unsupported")),
+                    };
+                    let input = image()?;
+                    let ref_url = uploaded_image_url
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| data_uri(input));
+                    serde_json::json!({"model":a.model,"input":{"prompt":prompt,"image_input":[ref_url],"aspect_ratio":img_aspect.unwrap_or("auto"),"resolution":resolution,"output_format":"png"}})
+                }
+                ("higgsfield", "ideogram/v4.0", "text-to-image") => {
+                    serde_json::json!({"prompt":prompt,"aspect_ratio":img_aspect.unwrap_or("1:1"),"rendering_speed":"DEFAULT"})
+                }
+                ("higgsfield", "recraft/v4.1/text-to-image", "text-to-image") => {
+                    serde_json::json!({"prompt":prompt,"aspect_ratio":img_aspect.unwrap_or("1:1"),"resolution":"1k","output_format":"png"})
+                }
                 _ => return Err(Error::Protocol("provider_model_not_approved")),
             });
         }
@@ -514,6 +657,82 @@ impl DirectProvider {
                 serde_json::json!({"model":a.model,"prompt":prompt,"duration":duration,"resolution":"768P","ratio":wide_aspect.filter(|v| *v != "auto").unwrap_or("16:9"),"prompt_expansion":false})
             }
             "atlascloud" => return Err(Error::Protocol("provider_model_not_approved")),
+            "kie" if a.model == "kling-3.0/video" && a.modality == "text-to-video" => {
+                if !(3..=15).contains(&duration) {
+                    return Err(Error::Protocol("provider_duration_invalid"));
+                }
+                serde_json::json!({"model":a.model,"input":{"prompt":prompt,"image_urls":[],"duration":duration.to_string(),"sound":true,"mode":"std","multi_shots":false,"aspect_ratio":wide_aspect.filter(|v| *v != "auto").unwrap_or("16:9")}})
+            }
+            "kie" if a.model == "kling-3.0/video" && a.modality == "image-to-video" => {
+                if !(3..=15).contains(&duration) {
+                    return Err(Error::Protocol("provider_duration_invalid"));
+                }
+                let input = image()?;
+                let ref_url = uploaded_image_url
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| data_uri(input));
+                serde_json::json!({"model":a.model,"input":{"prompt":prompt,"image_urls":[ref_url],"duration":duration.to_string(),"sound":true,"mode":"std","multi_shots":false}})
+            }
+            "kie" => return Err(Error::Protocol("provider_model_not_approved")),
+            "higgsfield" if a.model == "bytedance/seedance-2.5/text-to-video" && a.modality == "text-to-video" => {
+                if !(4..=15).contains(&duration) {
+                    return Err(Error::Protocol("provider_duration_invalid"));
+                }
+                serde_json::json!({"prompt":prompt,"duration":duration,"aspect_ratio":wide_aspect.filter(|v| *v != "auto").unwrap_or("16:9"),"resolution":"720p"})
+            }
+            "higgsfield" if a.model == "bytedance/seedance-2.0/image-to-video" && a.modality == "image-to-video" => {
+                if !(4..=15).contains(&duration) {
+                    return Err(Error::Protocol("provider_duration_invalid"));
+                }
+                let input = image()?;
+                let ref_url = uploaded_image_url
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| data_uri(input));
+                serde_json::json!({"prompt":prompt,"image_url":ref_url,"duration":duration,"resolution":"720p","generate_audio":true})
+            }
+            "higgsfield" if a.model == "kling-video/v3.0/std/text-to-video" && a.modality == "text-to-video" => {
+                if !(3..=15).contains(&duration) {
+                    return Err(Error::Protocol("provider_duration_invalid"));
+                }
+                serde_json::json!({"prompt":prompt,"duration":duration,"aspect_ratio":wide_aspect.filter(|v| *v != "auto").unwrap_or("16:9"),"resolution":"720p","sound":"on"})
+            }
+            "higgsfield" if a.model == "kling-video/v3.0/std/image-to-video" && a.modality == "image-to-video" => {
+                if !(3..=15).contains(&duration) {
+                    return Err(Error::Protocol("provider_duration_invalid"));
+                }
+                let input = image()?;
+                let ref_url = uploaded_image_url
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| data_uri(input));
+                serde_json::json!({"prompt":prompt,"image_url":ref_url,"duration":duration,"sound":"on"})
+            }
+            "higgsfield" if a.model == "kling-video/v2.5-turbo/standard/image-to-video" && a.modality == "image-to-video" => {
+                if !matches!(duration, 5 | 10) {
+                    return Err(Error::Protocol("provider_duration_invalid"));
+                }
+                let input = image()?;
+                let ref_url = uploaded_image_url
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| data_uri(input));
+                serde_json::json!({"prompt":prompt,"image_url":ref_url,"duration":duration})
+            }
+            "higgsfield" if a.model == "minimax/hailuo-2.3/standard/image-to-video" && a.modality == "image-to-video" => {
+                if !matches!(duration, 6 | 10) {
+                    return Err(Error::Protocol("provider_duration_invalid"));
+                }
+                let input = image()?;
+                let ref_url = uploaded_image_url
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| data_uri(input));
+                serde_json::json!({"prompt":prompt,"image_url":ref_url,"duration":duration})
+            }
+            "higgsfield" if a.model == "alibaba/wan-3.0/text-to-video" && a.modality == "text-to-video" => {
+                if !(2..=15).contains(&duration) {
+                    return Err(Error::Protocol("provider_duration_invalid"));
+                }
+                serde_json::json!({"prompt":prompt,"duration":duration,"aspect_ratio":wide_aspect.filter(|v| *v != "auto").unwrap_or("16:9"),"resolution":"720p"})
+            }
+            "higgsfield" => return Err(Error::Protocol("provider_model_not_approved")),
             // Each fal route owns its own body schema. In particular, the
             // Seedance Queue OpenAPI uses string durations; do not infer a
             // payload shape from a model family or an older provider API.
@@ -650,6 +869,15 @@ impl DirectProvider {
             "atlascloud" => {
                 child_or_root("atlascloud.ai") || host == "atlas-media.oss-us-west-1.aliyuncs.com"
             }
+            "kie" => child_or_root("aiquickdraw.com") || child_or_root("redpandaai.co"),
+            "higgsfield" => {
+                child_or_root("higgsfield.ai")
+                    || child_or_root("cloudfront.net")
+                    || child_or_root("amazonaws.com")
+                    || child_or_root("r2.cloudflarestorage.com")
+                    || child_or_root("fal.media")
+                    || host == "storage.googleapis.com"
+            }
             // fal's own schemas show result files at both fal.media and its
             // dedicated Google storage bucket. Do not permit arbitrary GCS
             // hosts: this exact host is the documented result origin.
@@ -665,6 +893,125 @@ impl DirectProvider {
         } else {
             None
         }
+    }
+    fn kie_output_url(&self, value: &Value) -> Option<String> {
+        let raw_json = value.pointer("/data/resultJson").and_then(Value::as_str)?;
+        let parsed: Value = serde_json::from_str(raw_json).ok()?;
+        let url = parsed.pointer("/resultUrls/0").and_then(Value::as_str)?;
+        self.output_url("kie", &serde_json::json!({"output": {"url": url}}))
+    }
+    fn upload_kie_image(&self, a: &Assignment, input: &AssignmentInput) -> Result<String> {
+        let ext = match input.mime.as_str() {
+            "image/png" => "png",
+            "image/jpeg" => "jpg",
+            "image/webp" => "webp",
+            _ => return Err(Error::Protocol("assignment_input_invalid")),
+        };
+        #[cfg(test)]
+        let upload_url = if let Some(origin) = &self.test_origin {
+            origin
+                .join("upstream/kie/upload")
+                .map_err(|_| Error::Protocol("provider_endpoint"))?
+        } else {
+            reqwest::Url::parse("https://kieai.redpandaai.co/api/file-base64-upload")
+                .map_err(|_| Error::Protocol("provider_endpoint"))?
+        };
+        #[cfg(not(test))]
+        let upload_url =
+            reqwest::Url::parse("https://kieai.redpandaai.co/api/file-base64-upload")
+                .map_err(|_| Error::Protocol("provider_endpoint"))?;
+        let data_uri = format!("data:{};base64,{}", input.mime, input.bytes_base64);
+        let resp = self
+            .client
+            .post(upload_url)
+            .header("authorization", self.authorization("kie")?)
+            .json(&serde_json::json!({
+                "base64Data": data_uri,
+                "uploadPath": format!("attelier/{}", a.job_id),
+                "fileName": format!("{}.{ext}", input.id),
+            }))
+            .send()?;
+        if !resp.status().is_success() {
+            return Err(Error::Provider(format!("kie-upload:{}", resp.status().as_u16())));
+        }
+        let body: Value = serde_json::from_slice(&resp.bytes()?)?;
+        if body.get("code").and_then(Value::as_u64) != Some(200) {
+            return Err(Error::Provider("kie-upload-rejected".into()));
+        }
+        let url = body
+            .pointer("/data/downloadUrl")
+            .and_then(Value::as_str)
+            .ok_or(Error::Protocol("provider_output_url"))?;
+        self.output_url("kie", &serde_json::json!({"output": {"url": url}}))
+            .ok_or(Error::Protocol("provider_output_url"))
+    }
+    fn upload_higgsfield_image(&self, input: &AssignmentInput) -> Result<String> {
+        #[cfg(test)]
+        let slot_url = if let Some(origin) = &self.test_origin {
+            origin
+                .join("upstream/higgsfield/upload-slot")
+                .map_err(|_| Error::Protocol("provider_endpoint"))?
+        } else {
+            reqwest::Url::parse("https://api.higgsfield.ai/files/generate-upload-url")
+                .map_err(|_| Error::Protocol("provider_endpoint"))?
+        };
+        #[cfg(not(test))]
+        let slot_url =
+            reqwest::Url::parse("https://api.higgsfield.ai/files/generate-upload-url")
+                .map_err(|_| Error::Protocol("provider_endpoint"))?;
+        let slot_resp = self
+            .client
+            .post(slot_url)
+            .header("authorization", self.authorization("higgsfield")?)
+            .json(&serde_json::json!({"content_type": input.mime}))
+            .send()?;
+        if !slot_resp.status().is_success() {
+            return Err(Error::Provider(format!(
+                "higgsfield-upload-slot:{}",
+                slot_resp.status().as_u16()
+            )));
+        }
+        let slot: Value = serde_json::from_slice(&slot_resp.bytes()?)?;
+        let upload_url = slot
+            .get("upload_url")
+            .and_then(Value::as_str)
+            .ok_or(Error::Protocol("provider_output_url"))?;
+        let public_url = slot
+            .get("public_url")
+            .and_then(Value::as_str)
+            .ok_or(Error::Protocol("provider_output_url"))?;
+        let checked_upload = self
+            .output_url("higgsfield", &serde_json::json!({"output": {"url": upload_url}}))
+            .ok_or(Error::Protocol("provider_output_url"))?;
+        let checked_public = self
+            .output_url("higgsfield", &serde_json::json!({"output": {"url": public_url}}))
+            .ok_or(Error::Protocol("provider_output_url"))?;
+        let bytes = B64
+            .decode(&input.bytes_base64)
+            .map_err(|_| Error::Protocol("assignment_input_invalid"))?;
+        let mut req = self.client.put(&checked_upload);
+        let mut has_ct = false;
+        if let Some(headers) = slot.get("upload_headers").and_then(Value::as_object) {
+            for (k, v) in headers {
+                if let Some(val) = v.as_str() {
+                    if k.eq_ignore_ascii_case("content-type") {
+                        has_ct = true;
+                    }
+                    req = req.header(k.as_str(), val);
+                }
+            }
+        }
+        if !has_ct {
+            req = req.header("content-type", input.mime.as_str());
+        }
+        let put_resp = req.body(bytes).send()?;
+        if !put_resp.status().is_success() {
+            return Err(Error::Provider(format!(
+                "higgsfield-upload-put:{}",
+                put_resp.status().as_u16()
+            )));
+        }
+        Ok(checked_public)
     }
     fn media(response: reqwest::blocking::Response) -> Result<Vec<u8>> {
         if response
@@ -685,22 +1032,36 @@ impl DirectProvider {
 }
 impl Provider for DirectProvider {
     fn submit(&self, a: &Assignment) -> Result<ProviderSubmission> {
-        if a.provider != self.configured_provider {
+        if !self.enabled_providers.contains(a.provider.as_str()) {
             return Err(Error::Protocol("configured_provider_mismatch"));
         }
         let endpoint = self.endpoint(&a.provider, &a.model, &a.modality)?;
         let authorization = self.authorization(&a.provider)?;
+        let uploaded_image = if matches!(a.modality.as_str(), "image-to-video" | "image-to-image") {
+            let input = a
+                .inputs
+                .first()
+                .ok_or(Error::Protocol("assignment_image_required"))?;
+            match a.provider.as_str() {
+                "kie" => Some(self.upload_kie_image(a, input)?),
+                "higgsfield" => Some(self.upload_higgsfield_image(input)?),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let body = self.payload_with_image_url(a, uploaded_image.as_deref())?;
         let response = self
             .client
             .post(endpoint)
             .header("authorization", authorization)
             .header("idempotency-key", format!("{}:{}", a.job_id, a.attempt_id))
-            .json(&self.payload(a)?)
+            .json(&body)
             .send()?;
         let status = response.status();
         let raw = response.bytes()?.to_vec();
         if !status.is_success() {
-            if matches!(status.as_u16(), 400 | 401 | 403 | 404 | 422) {
+            if matches!(status.as_u16(), 400 | 401 | 402 | 403 | 404 | 422) {
                 let provider_code = serde_json::from_slice::<Value>(&raw)
                     .ok()
                     .and_then(|value| {
@@ -730,6 +1091,20 @@ impl Provider for DirectProvider {
             )));
         }
         let value: Value = serde_json::from_slice(&raw)?;
+        if matches!(a.provider.as_str(), "kie" | "atlascloud") {
+            if let Some(code) = value.get("code").and_then(Value::as_u64) {
+                if code != 200 {
+                    if matches!(code, 400 | 401 | 402 | 403 | 404 | 422) {
+                        return Err(Error::ProviderTerminal {
+                            reason: "provider_rejected",
+                            http_status: Some(code as u16),
+                            provider_code: None,
+                        });
+                    }
+                    return Err(Error::Provider(format!("{}:{}", a.provider, code)));
+                }
+            }
+        }
         let reference =
             Self::reference(&value).ok_or(Error::Protocol("provider_reference_missing"))?;
         Ok(ProviderSubmission {
@@ -738,7 +1113,7 @@ impl Provider for DirectProvider {
         })
     }
     fn collect(&self, a: &Assignment, submission: &ProviderSubmission) -> Result<Vec<u8>> {
-        if a.provider != self.configured_provider {
+        if !self.enabled_providers.contains(a.provider.as_str()) {
             return Err(Error::Protocol("configured_provider_mismatch"));
         }
         let deadline = std::time::Instant::now()
@@ -780,6 +1155,7 @@ impl Provider for DirectProvider {
                 value
                     .pointer("/status")
                     .or_else(|| value.pointer("/data/status"))
+                    .or_else(|| value.pointer("/data/state"))
                     .or_else(|| value.pointer("/data/task_status"))
                     .and_then(Value::as_str)
                     .unwrap_or("running")
@@ -792,7 +1168,7 @@ impl Provider for DirectProvider {
                     provider_code: None,
                 });
             }
-            if matches!(normalized_status.as_str(), "failed" | "error")
+            if matches!(normalized_status.as_str(), "failed" | "fail" | "error" | "nsfw")
                 || (a.provider == "fal" && status == "COMPLETED" && value.get("error").is_some())
             {
                 return Err(Error::ProviderTerminal {
@@ -803,7 +1179,7 @@ impl Provider for DirectProvider {
             }
             if matches!(
                 normalized_status.as_str(),
-                "succeeded" | "succeed" | "completed" | "done"
+                "succeeded" | "succeed" | "success" | "completed" | "done"
             ) {
                 let completed = if a.provider == "fal" {
                     #[cfg(test)]
@@ -903,9 +1279,12 @@ impl Provider for DirectProvider {
                     };
                     return Self::media(output);
                 }
-                let url = self
-                    .output_url(&a.provider, &completed)
-                    .ok_or(Error::Protocol("provider_output_url"))?;
+                let url = if a.provider == "kie" {
+                    self.kie_output_url(&completed)
+                } else {
+                    self.output_url(&a.provider, &completed)
+                }
+                .ok_or(Error::Protocol("provider_output_url"))?;
                 let output = self.client.get(url).send()?;
                 if !output.status().is_success() {
                     return Err(Error::Provider("output_download".into()));

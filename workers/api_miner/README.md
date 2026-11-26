@@ -27,8 +27,12 @@ model execution, invoice, service availability, or commercial permission.
    The deployed CVM must also permit that user to access the read-only dstack
    socket; `doctor` can check configuration but cannot manufacture TDX access.
 3. Encrypt only keys that the miner is authorized to use in the Phala deployment:
-   `BYTEPLUS_API_KEY`, `KLING_ACCESS_KEY` plus `KLING_SECRET_KEY`,
-   `GOOGLE_CLOUD_ACCESS_TOKEN`, `FAL_KEY`, or `ATLASCLOUD_API_KEY`. Kling V2.6 uses its legacy
+   `BYTEPLUS_API_KEY`, `FAL_KEY`, `ATLASCLOUD_API_KEY`, `KIE_API_KEY`,
+   `HIGGSFIELD_API_KEY`, `KLING_ACCESS_KEY` plus `KLING_SECRET_KEY`, or
+   `GOOGLE_CLOUD_ACCESS_TOKEN`. Set `ATTELIER_PROVIDERS=auto` (or an explicit
+   comma-separated list such as `byteplus,fal,atlascloud,kie,higgsfield`) so a
+   **single worker** serves all sealed providers concurrently (`ATTELIER_PROVIDER`
+   remains supported for single-provider setups). Kling V2.6 uses its legacy
    AccessKey/SecretKey flow: the worker creates a short-lived HS256 JWT inside
    the CVM (cached only until shortly before its 30-minute expiry); do not
    replace that pair with a browser/API token.
@@ -95,21 +99,29 @@ worker against the same state directory.
 
 ## Reviewed model catalog & staged rollout
 
-The single audited worker binary supports all 5 upstream provider families (`byteplus`, `fal`, `atlascloud`, `kling`, `google-cloud`) across both video (`text-to-video`, `image-to-video`) and image (`text-to-image`, `image-to-image`) modalities so enabling new model families later requires no CVM image rebuild or re-attestation:
+The single audited worker binary supports all 7 upstream provider families (`byteplus`, `fal`, `atlascloud`, `kie`, `higgsfield`, `kling`, `google-cloud`) simultaneously inside one Phala TDX enclave (`ATTELIER_PROVIDERS=auto`), across both video (`text-to-video`, `image-to-video`) and image (`text-to-image`, `image-to-image`) modalities. Enabling new model families later requires no CVM image rebuild or re-attestation:
 
 | Family | Providers | Reviewed Models | Modalities | Rollout |
 |---|---|---|---|---|
-| **Seedance** | `byteplus`, `fal` | Seedance 2.5, 2.0, 2.0 Fast, 2.0 Mini | `text-to-video`, `image-to-video` | **Wave 1 (Launch)** |
-| **Kling** | `atlascloud`, `fal`, `kling` | Kling 4.0 (Video & Image), Kling 3 Turbo, Kling 2.6 | `text-to-video`, `image-to-video`, `text-to-image`, `image-to-image` | Staged |
+| **Seedance** | `byteplus`, `fal`, `higgsfield` | Seedance 2.5, 2.0, 2.0 Fast, 2.0 Mini | `text-to-video`, `image-to-video` | **Wave 1 (Launch)** |
+| **Kling** | `atlascloud`, `fal`, `kie`, `higgsfield`, `kling` | Kling 4.0 (Video & Image), Kling 3.0 / 3 Turbo, Kling 2.6 / 2.5 Turbo | `text-to-video`, `image-to-video`, `text-to-image`, `image-to-image` | Staged |
 | **Veo 3.1** | `google-cloud`, `fal` | Veo 3.1, Veo 3.1 Fast | `text-to-video`, `image-to-video` | Staged |
-| **MiniMax H3** | `fal`, `atlascloud` | MiniMax H3 Max, MiniMax H3 Developer | `text-to-video` | Staged |
-| **Wan 3.0** | `fal` | Wan 3.0 | `text-to-video` | Staged |
+| **MiniMax H3 / Hailuo** | `fal`, `atlascloud`, `higgsfield` | MiniMax H3 Max, MiniMax H3 Developer, Hailuo 2.3 | `text-to-video`, `image-to-video` | Staged |
+| **Wan 3.0** | `fal`, `higgsfield` | Wan 3.0 | `text-to-video` | Staged |
 | **FLUX 3 Max** | `fal` | FLUX 3 Max Video | `text-to-video`, `image-to-video` | Staged |
-| **Nano Banana** | `fal` | Nano Banana Pro & 2.1 (Create & Edit) | `text-to-image`, `image-to-image` | Staged |
+| **Nano Banana** | `fal`, `kie` | Nano Banana Pro & 2.1 (Create & Edit) | `text-to-image`, `image-to-image` | Staged |
 | **FLUX 2 Flash** | `fal` | FLUX 2 Flash (Create & Edit) | `text-to-image`, `image-to-image` | Staged |
 | **Seedream 5 Lite** | `fal` | Seedream 5 Lite (Create & Edit) | `text-to-image`, `image-to-image` | Staged |
+| **Ideogram / Recraft** | `higgsfield` | Ideogram 4.0, Recraft 4.1 | `text-to-image` | Staged |
 
-Production starts with **Seedance only** via the gateway's `enabledModels` allowlist in the API miner config (e.g. `["dreamina-seedance-2-5-260628", "bytedance/seedance-2.5/text-to-video"]`). Additional families are promoted incrementally by adding their upstream or canonical model IDs to `enabledModels`.
+Production starts with **Seedance only** via the gateway's `enabledModels` allowlist in the API miner config (e.g. `["dreamina-seedance-2-5-260628", "bytedance/seedance-2.5/text-to-video"]`). To enable another family (for example Kling 4.0), add its canonical or upstream model IDs to `enabledModels` and publish offers with `"provider": "atlascloud"` in `ATTELIER_MINER_OFFERS`.
+
+### QoS + Price routing
+
+The Attelier API gateway routes each canonical model across miners and providers using **Quality of Service × Price**:
+- Every miner's recent reliability (`successRate`, trailing `consecutiveFailures`) and completion latency (`avgLatencyMs`) are tracked per `(miner, provider, model)`.
+- Healthy, fast miners compete purely on lowest bid (`routingMultiplier = 1.0`).
+- Degraded reliability or repeated consecutive failures increase a miner's effective routing cost (up to `10×` circuit-breaker deprioritization at `≥ 3` consecutive failures) so traffic automatically fails over to healthy miners without ever inflating the customer price.
 
 ## Gateway protocol
 

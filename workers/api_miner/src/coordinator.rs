@@ -30,6 +30,30 @@ impl Coordinator {
             session_id: None,
         })
     }
+    /// Local loopback-only constructor for offline/smoke harnesses. Production
+    /// binaries must always use `Coordinator::new` which enforces HTTPS.
+    pub fn new_loopback(
+        base: &str,
+        worker_id: String,
+        miner_id: String,
+        keys: Keys,
+    ) -> Result<Self> {
+        let base = reqwest::Url::parse(base).map_err(|_| Error::Protocol("coordinator_url"))?;
+        if base.scheme() != "http" || base.host_str() != Some("127.0.0.1") {
+            return Err(Error::Protocol("coordinator_https_required"));
+        }
+        Ok(Self {
+            base,
+            client: reqwest::blocking::Client::builder()
+                .timeout(std::time::Duration::from_secs(45))
+                .redirect(reqwest::redirect::Policy::none())
+                .build()?,
+            worker_id,
+            miner_id,
+            keys,
+            session_id: None,
+        })
+    }
     #[cfg(test)]
     pub(crate) fn test_new(base: &str, worker_id: String, miner_id: String, keys: Keys) -> Result<Self> {
         Ok(Self {

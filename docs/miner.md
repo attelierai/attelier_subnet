@@ -15,7 +15,7 @@ Both lanes require a registered Finney SN126 hotkey and operator review before r
 Instead of hosting GPUs locally, an API miner runs the open-source Rust worker ([`workers/api_miner/`](../workers/api_miner/README.md)) inside a Phala Intel TDX confidential VM (e.g. `tdx.small`) with its own funded upstream provider credentials sealed inside the enclave.
 
 - **Hardware-rooted trust**: on every start, the worker generates fresh in-memory `Ed25519` (receipts) and `X25519` (encrypted assignment payloads) keys and binds them into a real Intel TDX DCAP quote verified by Attelier's pinned DCAP verifier.
-- **Duration-aware reverse auction**: the worker publishes signed offers every 2 minutes (5-minute TTL). For each organic customer request, the gateway selects the lowest compatible available bid (comparing miners and direct routes) and pins the winning bid at quote time.
+- **QoS + price reverse auction**: the worker publishes signed offers every 2 minutes (5-minute TTL) across one or all sealed providers (`ATTELIER_PROVIDERS=auto`, with per-offer `"provider"`). For each organic customer request, the gateway routes across compatible miners and providers by **Quality of Service × Price** (reliability, consecutive failures, latency, and lowest bid) and pins the winning bid at quote time.
 - **Fair reference merit**: bidding lower wins more traffic without penalizing merit per unit of served work. Idle time, empty hours, failed deliveries, and operator trials earn zero organic weight.
 - **Concurrency**: set `ATTELIER_MAX_CONCURRENCY` (e.g. `2`–`8`) to process multiple upstream video jobs concurrently within one CVM.
 

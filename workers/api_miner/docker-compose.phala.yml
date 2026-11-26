@@ -30,7 +30,9 @@ services:
       ATTELIER_COORDINATOR_URL: ${ATTELIER_COORDINATOR_URL:?reviewed HTTPS coordinator}
       ATTELIER_WORKER_ID: ${ATTELIER_WORKER_ID:?gateway admission ID}
       ATTELIER_MINER_ID: ${ATTELIER_MINER_ID:?registered hotkey identity}
-      ATTELIER_PROVIDER: ${ATTELIER_PROVIDER:?byteplus|kling|google-cloud|fal|atlascloud}
+      # Single-provider (ATTELIER_PROVIDER) or comma-separated / "auto" (ATTELIER_PROVIDERS).
+      ATTELIER_PROVIDER: ${ATTELIER_PROVIDER:-}
+      ATTELIER_PROVIDERS: ${ATTELIER_PROVIDERS:-auto}
       ATTELIER_MINER_OFFERS: ${ATTELIER_MINER_OFFERS:-[]}
       ATTELIER_MAX_CONCURRENCY: ${ATTELIER_MAX_CONCURRENCY:-1}
       BYTEPLUS_API_KEY: ${BYTEPLUS_API_KEY:-}
@@ -43,6 +45,8 @@ services:
       GOOGLE_CLOUD_OUTPUT_BUCKET: ${GOOGLE_CLOUD_OUTPUT_BUCKET:-}
       FAL_KEY: ${FAL_KEY:-}
       ATLASCLOUD_API_KEY: ${ATLASCLOUD_API_KEY:-}
+      KIE_API_KEY: ${KIE_API_KEY:-}
+      HIGGSFIELD_API_KEY: ${HIGGSFIELD_API_KEY:-}
     command: ["run"]
 
 volumes:

@@ -29,6 +29,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "GOOGLE_CLOUD_ACCESS_TOKEN",
                 "FAL_KEY",
                 "ATLASCLOUD_API_KEY",
+                "KIE_API_KEY",
+                "HIGGSFIELD_API_KEY",
             ] {
                 let configured = env::var(name)
                     .map(|v| !v.trim().is_empty())
@@ -288,8 +290,6 @@ fn run_once(
         env::var("ATTELIER_COORDINATOR_URL").map_err(|_| "ATTELIER_COORDINATOR_URL is required")?;
     let worker_id = env::var("ATTELIER_WORKER_ID").map_err(|_| "ATTELIER_WORKER_ID is required")?;
     let miner_id = env::var("ATTELIER_MINER_ID").map_err(|_| "ATTELIER_MINER_ID is required")?;
-    let provider_name =
-        env::var("ATTELIER_PROVIDER").map_err(|_| "ATTELIER_PROVIDER is required")?;
     let attestation_path = env::var("ATTELIER_TEE_ATTESTATION_FILE")
         .unwrap_or_else(|_| root.join("attestation.json").display().to_string());
     let attestation: Attestation = serde_json::from_slice(&fs::read(attestation_path)?)?;
@@ -303,7 +303,19 @@ fn run_once(
         runtime.clone(),
     )?
     .with_session(session_id);
-    let provider = DirectProvider::from_env(&provider_name)?;
+    let provider = direct_provider_from_env()?;
+    let enabled_providers = provider.enabled_providers();
+    let default_provider = env::var("ATTELIER_PROVIDER")
+        .ok()
+        .map(|s| s.trim().to_owned())
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            if enabled_providers.len() == 1 {
+                enabled_providers.first().cloned()
+            } else {
+                None
+            }
+        });
     let worker = Worker {
         worker_id,
         miner_id,
@@ -319,8 +331,16 @@ fn run_once(
     if !offers.is_empty() && now >= *renew_offers_at {
         let expires_at = (now + 300_000).min(worker.attestation.expires_at);
         for offer in offers {
+            let offer_provider = offer
+                .provider
+                .as_deref()
+                .or(default_provider.as_deref())
+                .ok_or("offer provider is required when multiple providers are enabled")?;
+            if !enabled_providers.iter().any(|p| p == offer_provider) {
+                return Err(format!("offer provider {offer_provider} is not enabled").into());
+            }
             let mut body = serde_json::Map::new();
-            body.insert("provider".into(), serde_json::json!(provider_name));
+            body.insert("provider".into(), serde_json::json!(offer_provider));
             body.insert("model".into(), serde_json::json!(offer.model));
             body.insert("modality".into(), serde_json::json!(offer.modality));
             if let Some(flat) = offer.quote_microusd {
@@ -345,6 +365,30 @@ fn run_once(
     Ok(())
 }
 
+fn direct_provider_from_env() -> Result<DirectProvider, Box<dyn std::error::Error>> {
+    if let Ok(raw) = env::var("ATTELIER_PROVIDERS") {
+        let trimmed = raw.trim();
+        if !trimmed.is_empty() {
+            if trimmed.eq_ignore_ascii_case("auto") {
+                return Ok(DirectProvider::from_env_auto()?);
+            }
+            let list: Vec<String> = trimmed
+                .split(',')
+                .map(|s| s.trim().to_owned())
+                .filter(|s| !s.is_empty())
+                .collect();
+            return Ok(DirectProvider::from_env_providers(&list)?);
+        }
+    }
+    if let Ok(single) = env::var("ATTELIER_PROVIDER") {
+        let trimmed = single.trim();
+        if !trimmed.is_empty() {
+            return Ok(DirectProvider::from_env(trimmed)?);
+        }
+    }
+    Ok(DirectProvider::from_env_auto()?)
+}
+
 fn max_concurrency_from_env() -> Result<usize, Box<dyn std::error::Error>> {
     match env::var("ATTELIER_MAX_CONCURRENCY") {
         Ok(raw) if !raw.trim().is_empty() => {
@@ -364,6 +408,8 @@ fn max_concurrency_from_env() -> Result<usize, Box<dyn std::error::Error>> {
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Offer {
+    #[serde(default)]
+    provider: Option<String>,
     model: String,
     modality: String,
     #[serde(default)]
@@ -397,7 +443,11 @@ fn offers_from_config(raw: &str) -> Result<Vec<Offer>, Box<dyn std::error::Error
                         && (1..=MAX_JS_SAFE_INT).contains(v)
                 })
         });
-        if offer.model.is_empty()
+        if offer
+            .provider
+            .as_deref()
+            .is_some_and(|p| p.trim().is_empty() || p.len() > 32)
+            || offer.model.is_empty()
             || offer.model.len() > 160
             || !matches!(
                 offer.modality.as_str(),
@@ -407,7 +457,7 @@ fn offers_from_config(raw: &str) -> Result<Vec<Offer>, Box<dyn std::error::Error
             || (offer.quote_microusd_per_second.is_some() && !per_sec_ok)
             || (offer.quotes_by_duration.is_some() && !by_dur_ok)
             || !(flat_ok || per_sec_ok || by_dur_ok)
-            || !seen.insert((&offer.model, &offer.modality))
+            || !seen.insert((offer.provider.as_deref().unwrap_or(""), &offer.model, &offer.modality))
         {
             return Err("invalid or duplicate miner offer".into());
         }

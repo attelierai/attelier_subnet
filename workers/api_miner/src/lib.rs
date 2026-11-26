@@ -1620,4 +1620,105 @@ mod tests {
 
         server.join().unwrap();
     }
+
+    #[test]
+    fn single_multi_provider_worker_serves_all_five_providers_and_rejects_unenabled() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let origin = format!("http://{address}/");
+        let server = thread::spawn(move || {
+            for _ in 0..8 {
+                let (mut s, _) = listener.accept().unwrap();
+                let mut raw = vec![0; 16384];
+                let n = s.read(&mut raw).unwrap();
+                let req = String::from_utf8_lossy(&raw[..n]);
+                let body = if req.contains("/kie/upload") {
+                    format!(r#"{{"code":200,"data":{{"downloadUrl":"http://{address}/kie-up.png"}}}}"#)
+                } else if req.contains("/kie/submit") {
+                    assert!(req.contains("kie-up.png") || req.contains("nano-banana-2-1"));
+                    r#"{"code":200,"data":{"taskId":"kie-task-1"}}"#.into()
+                } else if req.contains("/kie/status/kie-task-1") {
+                    format!(
+                        r#"{{"code":200,"data":{{"taskId":"kie-task-1","state":"success","resultJson":"{{\"resultUrls\":[\"http://{address}/output/kie\"]}}"}}}}"#
+                    )
+                } else if req.contains("/higgsfield/submit") {
+                    r#"{"request_id":"hf-task-1"}"#.into()
+                } else if req.contains("/higgsfield/status/hf-task-1") {
+                    format!(r#"{{"status":"completed","images":[{{"url":"http://{address}/output/hf"}}]}}"#)
+                } else if req.contains("/byteplus/submit") {
+                    r#"{"id":"bp-task-1"}"#.into()
+                } else if req.contains("/output/") {
+                    let bytes = b"multi-media";
+                    write!(
+                        s,
+                        "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                        bytes.len()
+                    )
+                    .unwrap();
+                    s.write_all(bytes).unwrap();
+                    continue;
+                } else {
+                    panic!("unexpected multi-provider req: {req}");
+                };
+                write!(
+                    s,
+                    "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                )
+                .unwrap();
+            }
+        });
+
+        let multi = DirectProvider::fixture_multi(
+            &origin,
+            &["byteplus", "fal", "atlascloud", "kie", "higgsfield"],
+        );
+        assert_eq!(multi.enabled_providers().len(), 5);
+
+        // 1. Kie I2I (upload + submit + poll + output)
+        let mut kie_a = assignment();
+        kie_a.provider = "kie".into();
+        kie_a.model = "nano-banana-2-1".into();
+        kie_a.modality = "image-to-image".into();
+        kie_a.inputs = vec![AssignmentInput {
+            id: "ref-1".into(),
+            mime: "image/png".into(),
+            sha256: sha256(b"png"),
+            bytes_base64: B64.encode(b"png"),
+        }];
+        kie_a.request = serde_json::json!({"prompt":"make brighter","resolution":"1K","imageId":"ref-1"});
+        kie_a.request_hash = sha256(&canonical(&kie_a.request).unwrap());
+        let kie_sub = multi.submit(&kie_a).unwrap();
+        assert_eq!(kie_sub.reference, "kie-task-1");
+        assert_eq!(multi.collect(&kie_a, &kie_sub).unwrap(), b"multi-media");
+
+        // 2. Higgsfield T2I (submit + poll + output)
+        let mut hf_a = assignment();
+        hf_a.provider = "higgsfield".into();
+        hf_a.model = "recraft/v4.1/text-to-image".into();
+        hf_a.modality = "text-to-image".into();
+        hf_a.request = serde_json::json!({"prompt":"minimalist poster","aspectRatio":"1:1"});
+        hf_a.request_hash = sha256(&canonical(&hf_a.request).unwrap());
+        let hf_sub = multi.submit(&hf_a).unwrap();
+        assert_eq!(hf_sub.reference, "hf-task-1");
+        assert_eq!(multi.collect(&hf_a, &hf_sub).unwrap(), b"multi-media");
+
+        // 3. BytePlus T2V on the SAME worker instance
+        let mut bp_a = assignment();
+        bp_a.provider = "byteplus".into();
+        bp_a.model = "dreamina-seedance-2-5-260628".into();
+        assert_eq!(multi.submit(&bp_a).unwrap().reference, "bp-task-1");
+
+        // 4. Unenabled provider (`kling`) is rejected fail-closed
+        let mut kling_a = assignment();
+        kling_a.provider = "kling".into();
+        kling_a.model = "kling-v2-6".into();
+        assert!(matches!(
+            multi.submit(&kling_a),
+            Err(Error::Protocol("configured_provider_mismatch"))
+        ));
+
+        server.join().unwrap();
+    }
 }
