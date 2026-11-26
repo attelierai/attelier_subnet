@@ -17,7 +17,7 @@ from forge.inference.final_allocation import (
     verify_final_allocation,
     verify_primary_echo,
 )
-from forge.inference.prelaunch import GENESIS, HOUR_MS, canonical, digest
+from forge.inference.prelaunch import GENESIS, HOUR_MS, TESTNET_GENESIS, canonical, digest
 
 
 @pytest.mark.parametrize("mode", [[], ["--dry-run"], ["--burn-only", "--dry-run"]])
@@ -171,6 +171,9 @@ def _signed(
     private: Path | None = None,
     primary: str = "primary-validator",
     window_end: int = 2 * HOUR_MS,
+    network: str = "finney",
+    netuid: int = 126,
+    genesis: str = GENESIS,
 ) -> tuple[bytes, str, dict, Path]:
     tmp_path.mkdir(parents=True, exist_ok=True)
     private = private or tmp_path / "gateway.key"
@@ -197,9 +200,9 @@ def _signed(
     ]
     body = {
         "schema": "attelier/final-allocation/v1",
-        "network": "finney",
-        "genesis": GENESIS,
-        "netuid": 126,
+        "network": network,
+        "genesis": genesis,
+        "netuid": netuid,
         "mechanism": 0,
         "issuedAtMs": window_end,
         "expiresAtMs": window_end + HOUR_MS,
@@ -503,3 +506,26 @@ def test_light_cli_reads_finalized_raw_primary_weights_without_gateway_or_wallet
                 == "light_primary_row_stale"
             )
             assert not (state / "live-dry-run.json").exists()
+
+
+def test_testnet_final_allocation_verifies_explicitly_and_fails_closed_on_finney(tmp_path):
+    raw, public, _, _ = _signed(
+        tmp_path,
+        network="test",
+        netuid=578,
+        genesis=TESTNET_GENESIS,
+    )
+    with pytest.raises(FinalAllocationError, match="final_allocation_namespace"):
+        verify_final_allocation(raw, public, now_ms=2 * HOUR_MS)
+
+    verified = verify_final_allocation(
+        raw,
+        public,
+        now_ms=2 * HOUR_MS,
+        expected_network="test",
+        expected_netuid=578,
+        expected_genesis=TESTNET_GENESIS,
+    )
+    assert verified["network"] == "test"
+    assert verified["netuid"] == 578
+    assert verified["genesis"] == TESTNET_GENESIS

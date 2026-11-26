@@ -51,7 +51,13 @@ def _integer(value: Any) -> bool:
     return type(value) is int and value >= 0
 
 
-def _validate_body(body: dict[str, Any]) -> None:
+def _validate_body(
+    body: dict[str, Any],
+    *,
+    expected_network: str = "finney",
+    expected_netuid: int = 126,
+    expected_genesis: str = GENESIS,
+) -> None:
     required = {
         "schema",
         "network",
@@ -71,9 +77,9 @@ def _validate_body(body: dict[str, Any]) -> None:
     if set(body) != required or body.get("schema") != BODY_SCHEMA:
         raise FinalAllocationError("final_allocation_body_schema")
     if (
-        body.get("network") != "finney"
-        or body.get("genesis") != GENESIS
-        or body.get("netuid") != 126
+        body.get("network") != expected_network
+        or body.get("genesis") != expected_genesis
+        or body.get("netuid") != expected_netuid
         or body.get("mechanism") != 0
         or not _identity(body.get("primaryValidatorHotkey"))
     ):
@@ -152,6 +158,9 @@ def verify_final_allocation(
     *,
     expected_policy_hash: str | None = None,
     now_ms: int | None = None,
+    expected_network: str = "finney",
+    expected_netuid: int = 126,
+    expected_genesis: str = GENESIS,
 ) -> dict[str, Any]:
     """Verify one fresh, complete M0 allocation from the pinned gateway key."""
     envelope = _strict_json(raw)
@@ -163,7 +172,12 @@ def verify_final_allocation(
     body = envelope.get("body")
     if not isinstance(body, dict):
         raise FinalAllocationError("final_allocation_body_schema")
-    _validate_body(body)
+    _validate_body(
+        body,
+        expected_network=expected_network,
+        expected_netuid=expected_netuid,
+        expected_genesis=expected_genesis,
+    )
     key = _raw_public_key(public_key)
     if (
         envelope.get("keyId") != hashlib.sha256(key).hexdigest()
@@ -180,18 +194,46 @@ def verify_final_allocation(
     return body
 
 
-def final_targets(body: dict[str, Any]) -> dict[int, tuple[str, str]]:
+def final_targets(
+    body: dict[str, Any],
+    *,
+    expected_network: str = "finney",
+    expected_netuid: int = 126,
+    expected_genesis: str = GENESIS,
+) -> dict[int, tuple[str, str]]:
     """Convert a validated feed to the exact identity tuples used by publication."""
-    _validate_body(body)
+    _validate_body(
+        body,
+        expected_network=expected_network,
+        expected_netuid=expected_netuid,
+        expected_genesis=expected_genesis,
+    )
     return {row["uid"]: (row["hotkey"], row["coldkey"]) for row in body["weights"]}
 
 
-def final_weights(body: dict[str, Any]) -> dict[int, int]:
-    _validate_body(body)
+def final_weights(
+    body: dict[str, Any],
+    *,
+    expected_network: str = "finney",
+    expected_netuid: int = 126,
+    expected_genesis: str = GENESIS,
+) -> dict[int, int]:
+    _validate_body(
+        body,
+        expected_network=expected_network,
+        expected_netuid=expected_netuid,
+        expected_genesis=expected_genesis,
+    )
     return {row["uid"]: row["weight"] for row in body["weights"]}
 
 
-def onchain_weights(body: dict[str, Any]) -> dict[int, int]:
+def onchain_weights(
+    body: dict[str, Any],
+    *,
+    expected_network: str = "finney",
+    expected_netuid: int = 126,
+    expected_genesis: str = GENESIS,
+) -> dict[int, int]:
     """Match the SDK's max-upscale quantization for a 65,535-share allocation.
 
     Gateway values deliberately sum to 65,535 because they are allocation
@@ -199,19 +241,36 @@ def onchain_weights(body: dict[str, Any]) -> dict[int, int]:
     65,535.  Publishing or echoing the shares as if they were raw chain values
     would produce a false mismatch whenever burn is not the largest allocation.
     """
-    shares = final_weights(body)
+    shares = final_weights(
+        body,
+        expected_network=expected_network,
+        expected_netuid=expected_netuid,
+        expected_genesis=expected_genesis,
+    )
     top = max(shares.values())
     return {uid: round((weight / top) * U16_MAX) for uid, weight in shares.items()}
 
 
-def verify_primary_echo(body: dict[str, Any], observed: dict[str, Any]) -> None:
+def verify_primary_echo(
+    body: dict[str, Any],
+    observed: dict[str, Any],
+    *,
+    expected_network: str = "finney",
+    expected_netuid: int = 126,
+    expected_genesis: str = GENESIS,
+) -> None:
     """Reject an echo until chain observation matches the gateway vector exactly.
 
     ``observed`` is deliberately a narrow adapter boundary.  The caller obtains
     it from its own finalized chain RPC; this module never trusts a remote
     validator's HTTP claim.
     """
-    _validate_body(body)
+    _validate_body(
+        body,
+        expected_network=expected_network,
+        expected_netuid=expected_netuid,
+        expected_genesis=expected_genesis,
+    )
     if (
         not isinstance(observed, dict)
         or set(observed)
@@ -225,8 +284,8 @@ def verify_primary_echo(body: dict[str, Any], observed: dict[str, Any]) -> None:
             "observedBlockHash",
             "lastUpdate",
         }
-        or observed.get("network") != "finney"
-        or observed.get("netuid") != 126
+        or observed.get("network") != expected_network
+        or observed.get("netuid") != expected_netuid
         or observed.get("mechanism") != 0
         or observed.get("hotkey") != body["primaryValidatorHotkey"]
         or not _integer(observed.get("observedBlock"))
@@ -238,7 +297,17 @@ def verify_primary_echo(body: dict[str, Any], observed: dict[str, Any]) -> None:
         or not isinstance(observed.get("weights"), list)
     ):
         raise FinalAllocationError("final_allocation_primary_observation")
-    expected = [[uid, weight] for uid, weight in sorted(onchain_weights(body).items())]
+    expected = [
+        [uid, weight]
+        for uid, weight in sorted(
+            onchain_weights(
+                body,
+                expected_network=expected_network,
+                expected_netuid=expected_netuid,
+                expected_genesis=expected_genesis,
+            ).items()
+        )
+    ]
     if observed["weights"] != expected:
         raise FinalAllocationError("final_allocation_primary_mismatch")
 
@@ -253,12 +322,18 @@ class FinalAllocationRunner:
         *,
         policy_hash: str | None = None,
         registry_verifier: Callable[[dict[str, Any]], None] | None = None,
+        expected_network: str = "finney",
+        expected_netuid: int = 126,
+        expected_genesis: str = GENESIS,
     ) -> None:
         _raw_public_key(public_key)
         if policy_hash is not None and not _hash(policy_hash):
             raise FinalAllocationError("final_allocation_policy")
         self.state_dir, self.public_key, self.policy_hash = state_dir, public_key, policy_hash
         self.registry_verifier = registry_verifier
+        self.expected_network = expected_network
+        self.expected_netuid = expected_netuid
+        self.expected_genesis = expected_genesis
         state_dir.mkdir(parents=True, exist_ok=True)
         self._lock = open(  # noqa: SIM115 - lock must live for this runner instance.
             state_dir / "final-allocation.lock", "a+", encoding="utf-8"
@@ -281,7 +356,13 @@ class FinalAllocationRunner:
 
     def process(self, raw: bytes, *, now_ms: int | None = None) -> dict[str, Any]:
         body = verify_final_allocation(
-            raw, self.public_key, expected_policy_hash=self.policy_hash, now_ms=now_ms
+            raw,
+            self.public_key,
+            expected_policy_hash=self.policy_hash,
+            now_ms=now_ms,
+            expected_network=self.expected_network,
+            expected_netuid=self.expected_netuid,
+            expected_genesis=self.expected_genesis,
         )
         if self.registry_verifier is not None:
             self.registry_verifier(

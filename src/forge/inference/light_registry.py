@@ -24,6 +24,9 @@ def verify_finalized_registry(
     registry: dict[str, Any],
     *,
     network: str = ARCHIVE_URL,
+    expected_netuid: int = 126,
+    expected_genesis: str = GENESIS,
+    expected_mechanism_count: int | None = 1,
     chain_factory: Callable[[str, int], Any] = BittensorChain,
 ) -> None:
     """Match hash, identities, owner and mechanism against one final block.
@@ -41,7 +44,7 @@ def verify_finalized_registry(
     try:
         # The selected node must retain the signed registry block's state;
         # a head-only endpoint cannot establish historical identities.
-        chain = chain_factory(network, 126)
+        chain = chain_factory(network, expected_netuid)
         if block > chain.finalized_height():
             raise RegistryError("light_registry_not_finalized")
         actual_hash = chain.finalized_block_hash(block).removeprefix("0x")
@@ -49,18 +52,23 @@ def verify_finalized_registry(
             raise RegistryError("light_registry_block_hash")
         raw = chain.subtensor._client._substrate.raw
         genesis = str(chain.subtensor._call(raw.get_block_hash(0)))
-        if genesis != GENESIS:
+        if genesis != expected_genesis:
             raise RegistryError("light_registry_genesis")
         from bittensor import storage
 
         at = chain.subtensor.at(block)
 
         def query(name: str) -> Any:
-            return _value(at.query(getattr(storage.SubtensorModule, name), [126]))
+            return _value(at.query(getattr(storage.SubtensorModule, name), [expected_netuid]))
 
         if str(query("SubnetOwner")) != registry.get("subnetOwnerColdkey"):
             raise RegistryError("light_registry_owner")
-        if int(query("MechanismCountCurrent")) != 1 or registry.get("mechanism") != 0:
+        mech_count = int(query("MechanismCountCurrent"))
+        if (
+            registry.get("mechanism") != 0
+            or mech_count < 1
+            or (expected_mechanism_count is not None and mech_count != expected_mechanism_count)
+        ):
             raise RegistryError("light_registry_mechanism")
         owners = chain.owner_snapshot(block)
         for miner in registry.get("miners", []):
