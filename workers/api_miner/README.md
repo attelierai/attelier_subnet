@@ -97,20 +97,33 @@ worker against the same state directory.
 
 ### Advertise an API capability
 
-Set `ATTELIER_MINER_OFFERS` in the sealed deployment. The price is the total
-per accepted request in millionths of a US dollar for **any supported duration**
-of that model and modality. For example, this quotes USD 0.50 for either five
-or ten seconds of Seedance text-to-video. Choose a price you can serve.
+Set `ATTELIER_MINER_OFFERS` (and optionally `ATTELIER_MAX_CONCURRENCY`, default `1`)
+in the sealed deployment. All prices are integer millionths of a US dollar
+(`1,000,000` = `$1.00`). Each offer supports three pricing fields with strict
+precedence:
+
+1. `quotesByDuration`: exact total price per duration in seconds (e.g. `{"5": 95000, "10": 180000}`).
+2. `quoteMicrousdPerSecond`: per-second rate multiplied by requested duration (e.g. `20000` = `$0.02/s`).
+3. `quoteMicrousd`: flat total per accepted request for any supported duration (e.g. `500000` = `$0.50`).
 
 ```json
-[{"model":"dreamina-seedance-2-5-260628","modality":"text-to-video","quoteMicrousd":500000}]
+[
+  {
+    "model": "dreamina-seedance-2-5-260628",
+    "modality": "text-to-video",
+    "quoteMicrousdPerSecond": 20000,
+    "quotesByDuration": { "5": 95000, "10": 180000 }
+  }
+]
 ```
 
 The worker takes the provider from `ATTELIER_PROVIDER`, signs inside its live
 attested session and refreshes offers every two minutes while polling. Each
 offer expires within five minutes and by the end of that session. To change the
-price, update the sealed list and restart the worker with its existing state.
-An empty list publishes no offers. A price change applies to future quotes.
+price or concurrency, update the sealed config and restart the worker with its
+existing state volume. An empty list publishes no offers. A price change applies
+to future quotes. Note that on Phala `dstack-0.6.5`, keep `--pre-launch-script phala-pre-launch.sh`
+so non-root UID `10001` can access the read-only dstack socket.
 
 Assignments are received only as an AES-GCM envelope for the session's X25519
 key. Its plaintext is `attelier/api-miner/v1`, bound to a worker/miner,

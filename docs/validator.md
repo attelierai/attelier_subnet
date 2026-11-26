@@ -1,9 +1,17 @@
-# Validator guide
+# Validator Guide (SN126)
 
-On Finney SN126, the default **light** validators copy the primary validator's finalized M0
-row. The **primary** reads Attelier's signed gateway feed and applies the
-selected incentive mechanism. Each validator submits from its own hotkey when
-publication is enabled. A CPU host with Python 3.12 and OpenSSL is sufficient.
+On Finney SN126 (Mechanism 0), community validators run in **light** mode (`--role light`, the default) and automatically copy the primary validator's finalized M0 weight row across incentive-mechanism switches. The **primary** validator verifies Attelier's signed gateway feeds and computes/publishes the active mechanism vector — or runs with `--burn-only --observe-api-allocation` during rollouts.
+
+A small CPU host with **Python 3.12+** and **OpenSSL 3.0+** is sufficient. No GPU, provider key, or miner credential is required.
+
+## Quick mode reference
+
+| Role / Mode | Who runs it | Exact flags | Current rollout state |
+| --- | --- | --- | --- |
+| **Community Light Validator** | Every external validator | `--role light --wallet.name NAME --wallet.hotkey HOTKEY --state-dir /var/lib/attelier-light` | **Recommended default** — follows primary finalized M0 weights automatically |
+| **Primary (Burn-Only + Dual-IM Observer)** | Primary operator during rollout | `--burn-only --observe-api-allocation https://inference.attelier.ai/v1/subnet/126/final-allocation/latest --observe-api-public-key-file PATH` | **Current live primary mode** (100% owner burn + dry-run verification of hourly API allocations) |
+| **Primary (Private API TEE)** | Primary operator when activating API weights | `--role primary --im api --wallet.name NAME --wallet.hotkey HOTKEY` | Ready (dry-run verified) |
+| **Primary (MiniMax H3 GPU)** | Primary operator for H3 lane | `--role primary --im minimax --wallet.name NAME --wallet.hotkey HOTKEY` | Paused during Dual-IM rollout |
 
 ## Start a light validator
 
@@ -274,7 +282,17 @@ With `--once`, a failed publication exits with status 1 instead of polling.
 For a read-only publication check, if `sqlite3` is installed:
 
 ```bash
+# Primary / light status
 cat /var/lib/attelier-light/status.json
+
+# Dual-IM API observer status (when running with --burn-only --observe-api-allocation)
+cat /var/lib/attelier-light/api-observation/observer.json
+
+# Latest sealed feeds published by the gateway (public, Ed25519-signed)
+curl -sf https://inference.attelier.ai/v1/subnet/126/final-allocation/latest | jq '.body | {sequence, accountingStatus, expiresAtMs}'
+curl -sf https://inference.attelier.ai/v1/subnet/126/light/latest | jq '.body | {sequence, expiresAtMs}'
+
+# Publication journal
 sqlite3 -readonly /var/lib/attelier-light/light.sqlite3 \
   'SELECT sequence, status, updated_at FROM live_intent ORDER BY updated_at DESC LIMIT 5;'
 ```

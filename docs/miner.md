@@ -1,86 +1,83 @@
-# Miner guide
+# Miner Guide (SN126)
 
-Choose the mechanism your worker can serve. Both require a registered SN126
-hotkey and gateway admission. The same validator receives the weight vector.
+Attelier SN126 supports **two miner lanes** feeding Finney Mechanism 0:
+1. **Private API TEE (`api_miner`, Active)** — Lightweight CPU worker running inside a reviewed **Phala Intel TDX** enclave, serving private video models (starting with BytePlus Seedance) via signed reverse-auction offers.
+2. **MiniMax H3 GPU (Paused)** — Dedicated GPU workers serving pinned open-weights checkpoints under reviewed profiles.
 
-## Private API models · BytePlus Seedance
+Both lanes require a registered Finney SN126 hotkey and operator review before receiving routed traffic. Monitor live status, attestation expiry, signed offers, 24h activity, and sealed hourly rewards in the **[Provider Console](https://console.attelier.ai/manage)** and **[Providers Dashboard](https://providers.attelier.ai)**.
 
-1. Prepare a funded provider account authorized to serve the selected model.
-   The miner runs a small CPU worker in a reviewed Phala TEE. BytePlus runs Seedance.
-2. Follow the [attested worker setup](../workers/api_miner/README.md#operator-quick-start)
-   to create the persistent identity, enroll the worker and bind its reviewed
-   runtime to your hotkey and allowed model/modalities.
-3. Set `ATTELIER_PROVIDER=byteplus`, the BytePlus key and `ATTELIER_MINER_OFFERS`
-   in the encrypted deployment. For example, this quotes USD 0.50 per job:
+---
+
+## Lane 1: Private API Models (Phala Intel TDX) · Active
+
+### How it works
+
+Instead of hosting GPUs locally, an API miner runs the open-source Rust worker ([`workers/api_miner/`](../workers/api_miner/README.md)) inside a Phala Intel TDX confidential VM (e.g. `tdx.small`) with its own funded upstream provider credentials sealed inside the enclave.
+
+- **Hardware-rooted trust**: on every start, the worker generates fresh in-memory `Ed25519` (receipts) and `X25519` (encrypted assignment payloads) keys and binds them into a real Intel TDX DCAP quote verified by Attelier's pinned DCAP verifier.
+- **Duration-aware reverse auction**: the worker publishes signed offers every 2 minutes (5-minute TTL). For each organic customer request, the gateway selects the lowest compatible available bid (comparing miners and direct routes) and pins the winning bid at quote time.
+- **Fair reference merit**: bidding lower wins more traffic without penalizing merit per unit of served work. Idle time, empty hours, failed deliveries, and operator trials earn zero organic weight.
+- **Concurrency**: set `ATTELIER_MAX_CONCURRENCY` (e.g. `2`–`8`) to process multiple upstream video jobs concurrently within one CVM.
+
+### Step-by-step setup
+
+1. **Register & apply**: register your hotkey on Finney SN126, verify it in [Provider Console](https://console.attelier.ai/manage), and request operator review for your provider account, model IDs, and Phala deployment. Possessing an upstream API key alone does not grant admission.
+2. **Prepare the Phala deployment**: follow the full [API Miner Operator Quick Start](../workers/api_miner/README.md#operator-quick-start) to:
+   - Pin the reviewed worker image digest in `docker-compose.phala.yml` (with the named state volume `attelier-api-miner-state` mounted at `/data/attelier-api-miner`).
+   - Include `--pre-launch-script phala-pre-launch.sh` (required on `dstack-0.6.5` for read-only dstack socket permissions for non-root UID `10001`).
+   - Generate the persistent control SPKI (`attelier-api-miner identity`) and upload the one-shot `attelier/api-miner-enrollment/v2` evidence envelope to the private enrollment collector.
+3. **Seal credentials and offers in `.phala.env`** (never in Git, shell args, or logs):
+   - Set `ATTELIER_PROVIDER=byteplus` and your `BYTEPLUS_API_KEY`.
+   - Set `ATTELIER_MAX_CONCURRENCY` (default `1`, recommended `2`–`4` depending on upstream rate limits).
+   - Set `ATTELIER_MINER_OFFERS` using any of the three supported pricing modes (all amounts in integer USD micros, where `1,000,000` = `$1.00`):
+
+   **Precedence per request:** `quotesByDuration[seconds]` → `quoteMicrousdPerSecond * seconds` → flat `quoteMicrousd`.
 
    ```json
-   [{"model":"dreamina-seedance-2-5-260628","modality":"text-to-video","quoteMicrousd":500000}]
+   [
+     {
+       "model": "dreamina-seedance-2-5-260628",
+       "modality": "text-to-video",
+       "quoteMicrousdPerSecond": 20000,
+       "quotesByDuration": { "5": 95000, "10": 180000 }
+     },
+     {
+       "model": "dreamina-seedance-2-5-260628",
+       "modality": "image-to-video",
+       "quoteMicrousdPerSecond": 20000,
+       "quotesByDuration": { "5": 95000, "10": 180000 }
+     }
+   ]
    ```
 
-4. Start the worker with `attelier-api-miner run`. It renews its signed offer
-   while polling. For Seedance 2.5 text-to-video it serves 720p, five or ten
-   seconds, landscape or portrait. The same total price covers either duration.
-   First-frame requests use a separate image-to-video offer with adaptive ratio.
+   *(A flat per-job `quoteMicrousd`—for example `500000` = `$0.50`—also remains supported and applies to any supported duration when duration-specific fields are omitted.)*
+4. **Run and verify**: the compose entrypoint runs `attelier-api-miner run`. It attests on startup, renews attestation before expiry, publishes signed offers every 2 minutes, and processes up to `ATTELIER_MAX_CONCURRENCY` jobs in parallel.
+   - Check live attestation status, `review_expires`, `inFlight / maxConcurrency`, active signed offers, `activity.last24h` (completed, failed, video seconds), and sealed hourly `apiMechanism` weight share in [Provider Console → Workers & Rewards](https://console.attelier.ai/manage).
 
-The gateway picks the lowest compatible available offer or direct provider
-quote for each organic request. It pins the winner and price at quote time.
-A completed job needs validated output, a signed receipt and settlement before
-it can contribute to the miner's share. A bid is a service valuation in USD
-micros. The subnet distributes emissions through weights. Idle time, an empty
-window and operator trials earn zero in this mechanism. Hosting can still cost
-money while the worker waits.
+### Operational & economic rules
 
-## MiniMax H3 GPU workers
+- **Durability & zero double-spend**: the worker records `(job, attempt)` in durable state before submitting upstream. On restart or timeout, it reconciles via gateway `recover` against the canonical upstream reference instead of issuing a second paid upstream call.
+- **Review expiry**: every admitted API miner carries an operator `review_expires` timestamp. Renew before expiry so the worker does not transition to `blocked`.
+- **No guaranteed payout**: bids are USD micro service valuations. Subnet emissions are distributed via finalized Finney weights and depend on chain consensus; hosting a CVM incurs compute costs even during empty hours.
 
-SN126 inference is currently permissioned. A provider is considered only after
-operator review of its public hotkey, worker binding, profile, and expiry. A
-registration or health response alone does not admit a worker.
+---
 
-Start at [Providers](https://providers.attelier.ai): verify the hotkey, apply for
-approval, select the published checkpoint and a nonempty set of profiles, then
-install the offered worker package with its scoped credential. Register the
-worker's authenticated public HTTPS endpoint and keep it active. Credentials
-belong in protected local worker state, never this repository or shell logs.
+## Lane 2: MiniMax H3 GPU Workers · Currently Paused
 
-The gateway retries approved active workers every minute. Once health,
-registration, identity, checkpoint and selected profiles match, it binds the
-worker automatically; installation delays do not revoke application approval.
-New coverage may wait for the next frozen UTC-hour policy. Explicit pauses are
-respected. A successful timely synthetic delivery must prove each profile before
-ordinary organic requests can use it; healthy status alone is insufficient.
+> **Status:** H3 GPU admission and organic H3 routing are currently **paused** during the Dual-IM rollout while the Private API TEE lane is active. Existing H3 policy and accounting contracts remain intact below for reference and future re-enablement.
 
-Providers do not submit weights or sign reward artifacts. Validators calculate
-and publish them from the signed gateway feed. Eligible service can receive
-chain rewards, whose effective amount depends on consensus; gateway accounting
-alone never proves settled payment.
+SN126 H3 inference is permissioned. A provider is considered only after operator review of its public hotkey, worker binding, profile, and expiry. Registration or a healthy endpoint alone does not admit a worker.
 
-The worker must preserve one durable identity across a restart and return the
-media and receipt data required by the prelaunch policy. Missing, expired, or
-inconsistent bindings are excluded from the closed ledger rather than inferred
-as successful service. A deterministic `pixel_frames` operator proposal may set
-all 18 canonical tuples without a GPU benchmark; its weights are duration ×
-pixels normalized to the 5-second 480p landscape baseline = 1,000. A
-`reference_gpu` basis remains optional and must retain its reviewed evidence.
-Install the worker version and immutable artifacts supplied by the selected
-checkpoint's bootstrap; do not infer current runtime requirements from a
-historical signed policy version. The worker's technical timeout is separate
-from each profile's customer execution and delivery deadlines.
+1. Start at [Providers](https://providers.attelier.ai) / [Provider Console](https://console.attelier.ai/manage): verify the hotkey, apply for approval, select the published checkpoint and a nonempty set of profiles, then install the offered worker package with its scoped `h3w_` credential.
+2. Register the worker's authenticated public HTTPS endpoint and keep it active. Credentials belong in protected local worker state, never in this repository or shell logs.
+3. The gateway reconciles approved active workers every minute. Once health, registration, identity, checkpoint, and selected profiles match, it binds the worker automatically; new coverage joins at the next frozen UTC-hour policy. Explicit pauses are respected.
+4. A successful timely synthetic delivery must prove each profile before ordinary organic requests can use it; healthy status alone is insufficient.
 
-The current live-policy contract admits at most one non-revoked worker for each
-application/hotkey; pausing does not release that binding. It accounts eligible
-completed exact-profile work in indefinite one-hour windows with a 5% service
-ceiling. Frozen remuneration bids discount each miner's share. V5 organic work
-earns twice equivalent synthetic reward units within that ceiling. Cancelled,
-late or invalid work earns none. Continuous synthetic demand targets equal
-admission counts across published profiles, subject to compatible capacity;
-it promises neither traffic nor equal GPU time per worker. Organic work has
-priority, and synthetic cancellation retains its slot until release is confirmed.
+### H3 accounting summary
 
-During partial outages or empty windows, validators can retain the latest
-positive allocation for currently available workers using fresh signed
-availability, bounded by the original source deadline. Without eligible work
-or valid continuity, unused service allocation burns. Later recovery never
-backfills missed windows. See the validator guide for the continuity limits.
+- **One worker per hotkey**: the live-policy contract admits at most one non-revoked H3 worker per application/hotkey (pausing does not release that binding). TEE API workers have separate attestation-enrolled concurrency and do not consume H3 slots.
+- **Hourly windows & 5% ceiling**: eligible completed exact-profile work is accounted in one-hour UTC windows with a 5% service ceiling. Frozen remuneration bids discount each miner's share; V5 organic work earns twice equivalent synthetic reward units within that ceiling. Cancelled, late, or invalid work earns none.
+- **Pixel-frames basis**: deterministic `pixel_frames` weights equal `duration × pixels` normalized to the 5-second 480p landscape baseline (`= 1,000`).
+- **Continuity & burn**: during partial outages or empty windows, validators may retain the latest positive allocation for currently available workers using fresh signed availability up to the source deadline; without eligible work or valid continuity, unused allocation burns and is never backfilled.
 
-Read the [prelaunch contract](INFERENCE_PRELAUNCH.md) for the exact worker,
-ledger, and eligibility fields.
+Read the [prelaunch contract](INFERENCE_PRELAUNCH.md) for the exact H3 worker, ledger, and eligibility fields.
