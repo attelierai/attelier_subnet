@@ -22,6 +22,7 @@ runs/
 .env
 .env.*
 !.env.example
+!.env.validator.example
 
 # Local agent instructions are never published.
 AGENTS.md

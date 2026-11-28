@@ -288,6 +288,75 @@ def test_api_primary_dry_run_requires_no_wallet_or_signer(tmp_path, monkeypatch)
     assert output["allocationShares"] == [[row["uid"], row["weight"]] for row in body["weights"]]
 
 
+def test_community_validator_role_publishes_directly_with_env_defaults_and_non_primary_hotkey(
+    tmp_path, monkeypatch
+):
+    """Any registered SN126 validator can verify and publish the signed API allocation directly."""
+    from forge.inference.final_allocation import onchain_weights
+    from forge.inference.primary_follow import PRIMARY_HOTKEY
+
+    raw, public, body, _ = _signed(tmp_path, primary=PRIMARY_HOTKEY)
+    key_file = tmp_path / "gateway.pub"
+    key_file.write_text(public)
+    import forge.chain as forge_chain
+    import forge.inference.final_allocation as allocation
+    import forge.inference.light as light
+    import forge.inference.light_publication as light_pub
+
+    published: list[tuple[dict, dict]] = []
+
+    class FakeHotkey:
+        ss58_address = "5CommunityValidatorHotkey11111111111111111111111"
+
+    class FakeWallet:
+        def __init__(self, **_kwargs):
+            self.hotkey = FakeHotkey()
+
+    class FakeChain:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def close(self):
+            pass
+
+    class FakePublisher:
+        def __init__(self, _journal, sdk_pub):
+            self.publisher = sdk_pub
+
+        def process(self, payload, artifact, forced_weights=None):
+            published.append((payload, forced_weights))
+            return {"status": "REVEALED"}
+
+    monkeypatch.setattr(allocation.time, "time", lambda: (2 * HOUR_MS + 1) / 1000)
+    monkeypatch.setattr(light, "fetch_feed", lambda *_args, **_kwargs: raw)
+    monkeypatch.setattr(light, "verify_finalized_registry", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(forge_chain, "BittensorChain", FakeChain)
+    monkeypatch.setattr(light_pub, "LivePublisher", FakePublisher)
+    import bittensor as bt
+
+    monkeypatch.setattr(bt, "Wallet", FakeWallet)
+    monkeypatch.setenv("WALLET_NAME", "community")
+    monkeypatch.setenv("WALLET_HOTKEY", "val1")
+    monkeypatch.setenv("STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("VALIDATOR_ROLE", "validator")
+    monkeypatch.setenv("VALIDATOR_IM", "api")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "attelier-validator",
+            "--once",
+            "--final-allocation-url",
+            "http://127.0.0.1:1/fixture/latest",
+            "--final-allocation-public-key-file",
+            str(key_file),
+        ],
+    )
+    light.main()
+    assert len(published) == 1
+    assert published[0][1] == onchain_weights(body)
+
+
 def test_final_allocation_rechecks_signed_identities_at_the_finalized_registry(tmp_path):
     raw, public, _, _ = _signed(tmp_path)
     observed = []

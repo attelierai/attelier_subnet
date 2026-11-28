@@ -1,0 +1,24 @@
+services:
+  validator:
+    build:
+      context: .
+      dockerfile: Dockerfile.validator
+    container_name: attelier-sn126-validator
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      VALIDATOR_ROLE: ${VALIDATOR_ROLE:-validator}
+      VALIDATOR_IM: ${VALIDATOR_IM:-api}
+      WALLET_PATH: /wallets
+      STATE_DIR: /state
+      BITTENSOR_NETWORK: ${BITTENSOR_NETWORK:-finney}
+      INTERVAL_SECONDS: ${INTERVAL_SECONDS:-60}
+    volumes:
+      - ${HOST_WALLETS_DIR:-~/.bittensor/wallets}:/wallets:ro
+      - ${HOST_STATE_DIR:-./state/validator}:/state
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

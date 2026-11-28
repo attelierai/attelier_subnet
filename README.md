@@ -29,9 +29,21 @@ Key invariants:
 - **Hardware attestation**: API miners authenticate via real Intel TDX DCAP quotes bound to ephemeral in-memory runtime keys (`Ed25519` + `X25519`), not static API tokens.
 - **Rollout safety**: a `--burn-only` primary publisher can keep renewing 100% owner burn while running `--observe-api-allocation` in the same process to verify sealed hourly API allocations in dry-run.
 
+## Quick Start — Run a Validator (3 steps)
+
+No GPU, no API keys, no provider secrets. Verifies Attelier's Ed25519-signed 6h rolling cap-and-burn allocation directly in the same tempo:
+
+```bash
+git clone https://github.com/attelierai/attelier_subnet.git && cd attelier_subnet
+cp .env.validator.example .env   # set WALLET_NAME and WALLET_HOTKEY
+docker compose -f docker-compose.validator.yml up -d --build
+```
+
+Prefer native Python + PM2? Run `./scripts/install-validator.sh` (includes a walletless dry-run check). Full guide: **[docs/validator.md](docs/validator.md)**.
+
 ## Quick Links
 
-- **[Validator Guide](docs/validator.md)** — Run a community light validator (3 commands), primary validator (`--im api` / `--im minimax`), or `--burn-only` dual-IM observer.
+- **[Validator Guide](docs/validator.md)** — 3-step Docker Compose, PM2/systemd, autoupdate, custom RPC, and status checks.
 - **[Miner Guide](docs/miner.md)** — Set up a Phala Intel TDX Private API miner (duration-aware offers, concurrency, DCAP attestation) or review H3 GPU worker requirements.
 - **[API Miner Worker Runbook](workers/api_miner/README.md)** — Rust worker CLI, Phala Cloud (`phala@1.1.22` + `dstack-0.6.5`), secret sealing, enrollment, and recovery.
 - **[H3 Policy & Prelaunch Contract](docs/INFERENCE_PRELAUNCH.md)** — Exact H3 worker, ledger, and eligibility contract.

@@ -340,11 +340,16 @@ def _network(value: str) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--state-dir", type=Path, default=Path("/var/lib/attelier-light"))
+    parser.add_argument(
+        "--state-dir",
+        type=Path,
+        default=Path(os.environ.get("STATE_DIR") or "/var/lib/attelier-light"),
+    )
     parser.add_argument("--url", help="MiniMax gateway receipt URL")
     parser.add_argument(
         "--final-allocation-url",
         metavar="URL",
+        default=os.environ.get("FINAL_ALLOCATION_URL") or None,
         help="Signed API-miner allocation endpoint",
     )
     parser.add_argument(
@@ -357,15 +362,25 @@ def main() -> None:
         "--role",
         "--api-role",
         dest="role",
-        choices=["primary", "light"],
-        help="Primary follows the gateway. Light copies finalized primary weights.",
+        choices=["primary", "validator", "light"],
+        default=os.environ.get("VALIDATOR_ROLE") or None,
+        help=(
+            "validator verifies the signed gateway feed directly (zero lag); "
+            "primary is pinned to the primary hotkey; "
+            "light copies finalized primary weights on chain."
+        ),
     )
     parser.add_argument(
         "--im",
         choices=["minimax", "api"],
-        help="Select the primary validator's incentive mechanism",
+        default=os.environ.get("VALIDATOR_IM") or None,
+        help="Select the incentive mechanism (api for SN126 Private API TEE; minimax for H3 GPU)",
     )
-    parser.add_argument("--interval-seconds", type=int, default=60)
+    parser.add_argument(
+        "--interval-seconds",
+        type=int,
+        default=int(os.environ.get("INTERVAL_SECONDS") or "60"),
+    )
     parser.add_argument(
         "--observe-api-allocation",
         metavar="URL",
@@ -393,7 +408,7 @@ def main() -> None:
         "--network",
         "--subtensor-endpoint",
         type=_network,
-        default="finney",
+        default=os.environ.get("BITTENSOR_NETWORK") or "finney",
         metavar="FINNEY_OR_WS_URL",
         help="Finney (default) or a custom WebSocket RPC used for all chain reads and publication",
     )
@@ -410,21 +425,34 @@ def main() -> None:
         "--wallet",
         dest="wallet",
         metavar="NAME",
-        help="Bittensor wallet name; required unless --dry-run",
+        default=os.environ.get("WALLET_NAME") or None,
+        help="Bittensor wallet name (or WALLET_NAME env); required unless --dry-run",
     )
     parser.add_argument(
         "--wallet.hotkey",
         "--hotkey",
         dest="hotkey",
         metavar="NAME",
-        help="Bittensor hotkey name; required unless --dry-run",
+        default=os.environ.get("WALLET_HOTKEY") or None,
+        help="Bittensor hotkey name (or WALLET_HOTKEY env); required unless --dry-run",
     )
     parser.add_argument(
         "--wallet.path",
         "--wallet-path",
         dest="wallet_path",
         metavar="PATH",
-        help="Optional wallet directory (default: ~/.bittensor/wallets)",
+        default=os.environ.get("WALLET_PATH") or None,
+        help="Optional wallet directory (or WALLET_PATH env; default: ~/.bittensor/wallets)",
+    )
+    parser.add_argument(
+        "--lock-dir",
+        type=Path,
+        default=Path(os.environ["LOCK_DIR"]) if os.environ.get("LOCK_DIR") else None,
+        help=(
+            "Optional publisher lock directory "
+            "(default: /var/lib/attelier-light/publisher-locks for default state-dir, "
+            "else <state-dir>/publisher-locks)"
+        ),
     )
     parser.add_argument("--allow-http-fixture", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -468,12 +496,14 @@ def main() -> None:
         args.final_allocation_url or args.final_allocation_public_key_file
     ):
         parser.error("MiniMax uses the H3 receipt feed")
+    if args.role == "validator" and args.im is None and not args.final_allocation_url:
+        args.im = "api"
     if args.im == "api":
         args.final_allocation_url = args.final_allocation_url or DEFAULT_FINAL_ALLOCATION_URL
     if args.burn_only and args.final_allocation_url:
         parser.error("use --burn-only by itself to run the dedicated burn publisher")
-    if args.final_allocation_url and not args.dry_run and args.role != "primary":
-        parser.error("live API allocation requires --role primary")
+    if args.final_allocation_url and not args.dry_run and args.role not in {"primary", "validator"}:
+        parser.error("live API allocation requires --role validator or --role primary")
     if args.final_allocation_public_key_file and not args.final_allocation_url:
         parser.error("an allocation key requires the API mechanism")
     if not args.dry_run and (not args.wallet or not args.hotkey):
@@ -533,13 +563,22 @@ def main() -> None:
                 "finney", 126, endpoint=None if args.network == "finney" else args.network
             )
             if not args.dry_run:
+                lock_dir = (
+                    args.lock_dir
+                    if args.lock_dir is not None
+                    else (
+                        Path("/var/lib/attelier-light/publisher-locks")
+                        if args.state_dir == Path("/var/lib/attelier-light")
+                        else args.state_dir / "publisher-locks"
+                    )
+                )
                 publisher = LivePublisher(
                     LiveJournal(args.state_dir / "light.sqlite3"),
                     SdkM0Publisher(
                         chain,
                         wallet,
                         wallet.hotkey.ss58_address,
-                        lock_dir=Path("/var/lib/attelier-light/publisher-locks"),
+                        lock_dir=lock_dir,
                     ),
                 )
         except Exception as error:
@@ -763,16 +802,16 @@ def main() -> None:
                     # that hour. This fresh W+1 publication is prospective;
                     # it never compensates the outage or rewrites the burn.
                     assert publisher is not None
-                    if args.final_allocation_url and args.role == "primary":
+                    if args.final_allocation_url and args.role in {"primary", "validator"}:
                         from forge.inference.final_allocation import onchain_weights
 
-                        if (
+                        if args.role == "primary" and (
                             not publisher.publisher.validator_hotkey
                             == body["primaryValidatorHotkey"]
                             == PRIMARY_HOTKEY
                         ):
                             raise LightError("light_primary_signer_mismatch")
-                        primary_body = {
+                        api_body = {
                             "ledger": {"sequence": body["sequence"], "window": body["window"]},
                             "registry": {
                                 "subnetOwnerColdkey": body["registry"]["subnetOwnerColdkey"],
@@ -780,7 +819,7 @@ def main() -> None:
                             },
                         }
                         publisher.process(
-                            primary_body, {"miners": []}, forced_weights=onchain_weights(body)
+                            api_body, {"miners": []}, forced_weights=onchain_weights(body)
                         )
                     elif args.burn_only:
                         hour = body["ledger"]["window"]["endMs"] // HOUR_MS

@@ -1,0 +1,28 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY pyproject.toml README.md ./
+COPY src ./src
+
+RUN pip install --no-cache-dir '.[chain]'
+
+VOLUME ["/wallets", "/state"]
+
+ENV VALIDATOR_ROLE=validator \
+    VALIDATOR_IM=api \
+    WALLET_PATH=/wallets \
+    STATE_DIR=/state \
+    BITTENSOR_NETWORK=finney \
+    INTERVAL_SECONDS=60
+
+ENTRYPOINT ["attelier-validator"]
