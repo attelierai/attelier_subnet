@@ -31,15 +31,26 @@ Key invariants:
 
 ## Quick Start — Run a Validator (3 steps)
 
-No GPU, no API keys, no provider secrets. Verifies Attelier's Ed25519-signed 6h rolling cap-and-burn allocation directly in the same tempo:
+No GPU, no API keys, no provider secrets. Verifies Attelier's Ed25519-signed 6h rolling cap-and-burn allocation directly in the same tempo.
+
+**Without Docker (Python 3.12+ with PM2 or systemd):**
 
 ```bash
 git clone https://github.com/attelierai/attelier_subnet.git && cd attelier_subnet
-cp .env.validator.example .env   # set WALLET_NAME and WALLET_HOTKEY
+./scripts/install-validator.sh                   # installs .venv, creates .env, runs dry-run
+# edit .env -> set WALLET_NAME and WALLET_HOTKEY
+pm2 start ./scripts/run-validator.sh --name attelier-sn126-validator   # or: sudo ./scripts/install-systemd-validator.sh
+```
+
+**With Docker Compose:**
+
+```bash
+git clone https://github.com/attelierai/attelier_subnet.git && cd attelier_subnet
+cp .env.validator.example .env                   # set WALLET_NAME and WALLET_HOTKEY
 docker compose -f docker-compose.validator.yml up -d --build
 ```
 
-Prefer native Python + PM2? Run `./scripts/install-validator.sh` (includes a walletless dry-run check). Full guide: **[docs/validator.md](docs/validator.md)**.
+Full guide (autoupdate, custom RPC, status checks): **[docs/validator.md](docs/validator.md)**.
 
 ## Quick Links
 

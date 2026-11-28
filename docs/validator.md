@@ -17,7 +17,45 @@ Every hour, the Attelier gateway seals an Ed25519-signed allocation over a **6-h
 
 ---
 
-## Option 1 — Docker Compose (Recommended, 3 steps)
+## Option 1 — No Docker: Native Python + PM2 or systemd (3 steps)
+
+Works on any Linux host with Python 3.12+ and OpenSSL 3.0+ — **no Docker required**.
+
+**1. Clone, install `.venv`, create `.env`, and run a walletless dry-run check:**
+
+```bash
+git clone https://github.com/attelierai/attelier_subnet.git
+cd attelier_subnet
+./scripts/install-validator.sh
+```
+
+**2. Edit `.env` and set your wallet & hotkey names:**
+
+```bash
+nano .env   # set WALLET_NAME and WALLET_HOTKEY (and HOST_WALLETS_DIR if not ~/.bittensor/wallets)
+```
+
+**3. Start live weight publication** (pick PM2, systemd, or tmux/foreground):
+
+```bash
+# Option A — PM2 (loads .env automatically):
+pm2 start ./scripts/run-validator.sh --name attelier-sn126-validator
+pm2 save
+pm2 logs attelier-sn126-validator
+
+# Option B — systemd (pure Linux, no Node/PM2 needed):
+sudo ./scripts/install-systemd-validator.sh
+journalctl -u attelier-sn126-validator.service -f
+
+# Option C — Foreground / tmux / screen:
+./scripts/run-validator.sh
+```
+
+`./scripts/run-validator.sh` reads `.env`, defaults `STATE_DIR` to `./state/validator`, and runs `.venv/bin/attelier-validator --role validator --im api`.
+
+---
+
+## Option 2 — Docker Compose (3 steps)
 
 **1. Clone the repository:**
 
@@ -52,32 +90,6 @@ docker compose -f docker-compose.validator.yml down
 
 ---
 
-## Option 2 — Native Python + PM2 (3 steps)
-
-**1. Install and run a walletless dry-run check:**
-
-```bash
-git clone https://github.com/attelierai/attelier_subnet.git
-cd attelier_subnet
-./scripts/install-validator.sh
-```
-
-**2. Start live weight publication with PM2:**
-
-```bash
-pm2 start .venv/bin/attelier-validator \
-  --name attelier-sn126-validator --interpreter none -- \
-  --role validator --im api \
-  --wallet.name <WALLET> --wallet.hotkey <HOTKEY> \
-  --state-dir "$PWD/state/validator"
-pm2 save
-pm2 logs attelier-sn126-validator
-```
-
-*(Prefer systemd? Use [scripts/inference/attelier-light.service.example](../scripts/inference/attelier-light.service.example) and set `--role validator --im api`.)*
-
----
-
 ## Walletless dry-run check (verify before publishing)
 
 Inspect the exact verified weight vector without loading any wallet or signing anything:
@@ -96,14 +108,17 @@ cat ./state/check/live-dry-run.json
 Run the autoupdate loop to track `origin/main` every 5 minutes and rebuild/restart automatically when new commits land:
 
 ```bash
+# PM2 (no Docker):
+AUTOUPDATE_MODE=pm2 ./scripts/autoupdate-validator.sh
+
+# systemd (no Docker, no PM2):
+sudo AUTOUPDATE_MODE=systemd ./scripts/autoupdate-validator.sh
+
 # Docker (default):
 ./scripts/autoupdate-validator.sh
-
-# Or PM2:
-AUTOUPDATE_MODE=pm2 ./scripts/autoupdate-validator.sh
 ```
 
-Overrides: `AUTOUPDATE_INTERVAL` (seconds, default `300`), `AUTOUPDATE_BRANCH` (default `main`), `PM2_APP_NAME`.
+Overrides: `AUTOUPDATE_INTERVAL` (seconds, default `300`), `AUTOUPDATE_BRANCH` (default `main`), `PM2_APP_NAME`, `SYSTEMD_SERVICE`.
 
 ---
 

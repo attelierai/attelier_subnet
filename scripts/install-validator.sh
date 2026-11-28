@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# One-command native installer for the Attelier SN126 Validator (Python 3.12+, OpenSSL 3.0+).
+# One-command native installer for the Attelier SN126 Validator (no Docker required).
+# Requirements: Python 3.12+ and OpenSSL 3.0+.
 # Usage:
 #   ./scripts/install-validator.sh
 
@@ -26,24 +27,31 @@ else
   .venv/bin/python -m pip install -e '.[chain]'
 fi
 
+if [ ! -f "$REPO_ROOT/.env" ] && [ -f "$REPO_ROOT/.env.validator.example" ]; then
+  cp "$REPO_ROOT/.env.validator.example" "$REPO_ROOT/.env"
+  echo "Created .env from .env.validator.example (edit WALLET_NAME and WALLET_HOTKEY before starting)."
+fi
+
 mkdir -p "$REPO_ROOT/state/check"
 echo "Running walletless dry-run check against Finney SN126..."
 .venv/bin/attelier-validator --role validator --im api --dry-run --once --state-dir "$REPO_ROOT/state/check"
 
 echo ""
-echo "Dry-run succeeded! Result saved to state/check/live-dry-run.json:"
+echo "Dry-run succeeded! Verified vector saved to state/check/live-dry-run.json:"
 cat "$REPO_ROOT/state/check/live-dry-run.json"
 echo ""
 echo ""
-echo "Next — start live weight publication (replace WALLET and HOTKEY):"
+echo "Next — edit .env (set WALLET_NAME and WALLET_HOTKEY), then start with ONE of:"
 echo ""
-echo "  # Option A (PM2):"
-echo "  pm2 start $REPO_ROOT/.venv/bin/attelier-validator \\"
-echo "    --name attelier-sn126-validator --interpreter none -- \\"
-echo "    --role validator --im api --wallet.name WALLET --wallet.hotkey HOTKEY \\"
-echo "    --state-dir $REPO_ROOT/state/validator"
+echo "  # Option A — PM2 (no Docker):"
+echo "  pm2 start $REPO_ROOT/scripts/run-validator.sh --name attelier-sn126-validator"
 echo "  pm2 save"
 echo ""
-echo "  # Option B (Docker Compose):"
-echo "  cp .env.validator.example .env && nano .env"
+echo "  # Option B — systemd (no Docker, no Node/PM2):"
+echo "  sudo $REPO_ROOT/scripts/install-systemd-validator.sh"
+echo ""
+echo "  # Option C — Foreground / tmux / screen (no Docker):"
+echo "  $REPO_ROOT/scripts/run-validator.sh"
+echo ""
+echo "  # Option D — Docker Compose:"
 echo "  docker compose -f docker-compose.validator.yml up -d --build"
